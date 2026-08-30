@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/*
+ * Graphite-neutral palette. Deliberately no navy; gold is reserved for
+ * decisive moments and progress, violet is a secondary accent only.
+ */
+@theme {
+  --color-paper: #faf9f7;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f2f1ee;
+  --color-line: #e3e1dc;
+  --color-line-strong: #cfccc5;
+
+  --color-ink: #23221f;
+  --color-ink-soft: #55534d;
+  --color-ink-faint: #86837b;
+
+  --color-accent: #6b5cc4;
+  --color-accent-soft: #efecfb;
+  --color-gold: #ab7f21;
+  --color-gold-soft: #f8f0dc;
+
+  --color-win: #2f7a52;
+  --color-win-soft: #e6f2ea;
+  --color-loss: #a63d33;
+  --color-loss-soft: #f8eae8;
+  --color-draw: #6f6b62;
+  --color-draw-soft: #efeeea;
+
+  --color-board-light: #ecebe6;
+  --color-board-dark: #b7b2a6;
+
+  --font-sans: ui-sans-serif, -apple-system, "Pretendard", "Apple SD Gothic Neo",
+    "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Coaching sentences lead; numbers support them. */
+.prose-coach p {
+  line-height: 1.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

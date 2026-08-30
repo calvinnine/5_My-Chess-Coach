@@ -3,7 +3,7 @@
 Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 게임의 패인과 여러
 게임에 반복되는 습관을 한국어로 설명하는 로컬 단일 사용자 웹앱.
 
-- **저장소**: 로컬 전용 (`git init` 완료, 원격 미설정)
+- **저장소**: https://github.com/calvinnine/5_My-Chess-Coach (Private)
 - **스택**: Next.js 16 App Router · TypeScript · SQLite/Drizzle · chess.js ·
   react-chessboard · Zod · Recharts · Vitest · Playwright
 - **엔진**: Stockfish 18 (Homebrew)
@@ -78,9 +78,23 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 
 ---
 
+## 공개 서비스 전환 (설계 완료, 미착수)
+
+설계: `docs/public-app-plan.md`
+
+핵심 결론 — **브라우저 Stockfish WASM(lite-single)**. 실측 근거:
+- WASM lite-single이 네이티브 full보다 **빠름** (0.48s/포지션 vs 0.62s, depth 16).
+  작은 NNUE 망을 쓰기 때문.
+- 실제 게임 40포지션 대조: 평가 차 중앙값 **13cp**, 90퍼센타일 35cp — 앱의 최소
+  임계값(50cp)보다 작아 큰 판단(중대 실수·핵심 장면)은 흔들리지 않음.
+- 7MB(전체 빌드는 108MB), COOP/COEP 헤더 불필요.
+
+- [ ] Phase A — `AnalysisEngine` 인터페이스 분리, `WasmEngine` 추가 (테스트 97개 유지)
+- [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
+- [ ] Phase C — 다중 사용자 저장소(Turso 우선), 전역 API 큐, 어뷰즈 상한
+
 ## 다음 할 일
 
-- [ ] 남은 실전 618판 일괄 분석 (표준 깊이 기준 래피드 1판당 약 1분)
-- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 10판)
-- [ ] GitHub 공개 여부 결정 후 원격 저장소 연결
+- [ ] 남은 실전 616판 일괄 분석 진행 중 (`scripts/analyze-all.sh` 백그라운드)
+- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 11판)
 - [ ] (선택) Phase 5 LLM 계층

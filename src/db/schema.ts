@@ -55,6 +55,12 @@ export const games = sqliteTable(
     timeClass: text("time_class").notNull(),
     timeControl: text("time_control").notNull(),
     rules: text("rules").notNull().default("chess"),
+    /**
+     * human | coach | bot. Only `human` games feed coaching statistics: a
+     * training game against a Chess.com coach or engine bot says nothing about
+     * how the user performs against real opponents.
+     */
+    opponentKind: text("opponent_kind").notNull().default("human"),
     rated: integer("rated", { mode: "boolean" }).notNull().default(true),
     playerColor: text("player_color").notNull(), // white | black
     playerRating: integer("player_rating"),
@@ -79,6 +85,7 @@ export const games = sqliteTable(
     uniqueIndex("games_external_url_idx").on(t.externalUrl),
     index("games_player_played_idx").on(t.playerId, t.playedAt),
     index("games_status_idx").on(t.analysisStatus),
+    index("games_opponent_kind_idx").on(t.playerId, t.opponentKind),
   ],
 );
 

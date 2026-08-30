@@ -8,6 +8,7 @@ import {
   type NormalizedEval,
 } from "./eval";
 import type { Phase } from "@/lib/pgn/parse";
+import { withParticle } from "@/lib/korean";
 
 export const PIECE_VALUE: Record<PieceSymbol, number> = {
   p: 100,
@@ -202,7 +203,7 @@ export function detectThemes(ctx: ThemeContext): DetectedTheme[] {
     );
     themes.push({
       tag: "hanging_piece",
-      detail: `${worst.square}의 ${PIECE_NAMES[worst.piece]}가 충분한 보호 없이 남았습니다.`,
+      detail: `${worst.square}의 ${withParticle(PIECE_NAMES[worst.piece], "이/가")} 충분한 보호 없이 남았습니다.`,
     });
   }
 

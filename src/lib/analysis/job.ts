@@ -136,7 +136,13 @@ function selectTargets(options: StartOptions) {
     return db
       .select({ id: games.id })
       .from(games)
-      .where(and(inArray(games.id, options.gameIds), eq(games.rules, "chess")))
+      .where(
+        and(
+          inArray(games.id, options.gameIds),
+          eq(games.rules, "chess"),
+          eq(games.opponentKind, "human"),
+        ),
+      )
       .all();
   }
   const rows = db
@@ -144,8 +150,17 @@ function selectTargets(options: StartOptions) {
     .from(games)
     .where(
       options.playerId
-        ? and(eq(games.analysisStatus, "pending"), eq(games.playerId, options.playerId), eq(games.rules, "chess"))
-        : and(eq(games.analysisStatus, "pending"), eq(games.rules, "chess")),
+        ? and(
+            eq(games.analysisStatus, "pending"),
+            eq(games.playerId, options.playerId),
+            eq(games.rules, "chess"),
+            eq(games.opponentKind, "human"),
+          )
+        : and(
+            eq(games.analysisStatus, "pending"),
+            eq(games.rules, "chess"),
+            eq(games.opponentKind, "human"),
+          ),
     )
     .all()
     .sort((a, b) => b.playedAt - a.playedAt);

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, ne, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gameReviews, games } from "@/db/schema";
 import { handleError, ok } from "@/lib/api";
@@ -23,6 +23,10 @@ export async function GET(request: Request) {
 
     const timeClass = q.get("timeClass");
     if (timeClass && timeClass !== "all") filters.push(eq(games.timeClass, timeClass));
+
+    const opponent = q.get("opponent");
+    if (opponent === "human") filters.push(eq(games.opponentKind, "human"));
+    if (opponent === "practice") filters.push(ne(games.opponentKind, "human"));
 
     const analysis = q.get("analysis");
     if (analysis === "analyzed") filters.push(eq(games.analysisStatus, "completed"));
@@ -63,6 +67,7 @@ export async function GET(request: Request) {
         timeControl: row.timeControl,
         rated: row.rated,
         rules: row.rules,
+        opponentKind: row.opponentKind,
         playerColor: row.playerColor,
         playerRating: row.playerRating,
         opponentUsername: row.opponentUsername,

@@ -21,7 +21,15 @@ export interface ParsedGame {
 }
 
 export class PgnParseError extends Error {
-  constructor(message: string) {
+  /**
+   * `empty` means the PGN was well-formed but carried no moves — an aborted
+   * game. That is a normal Chess.com record, not a failure to parse, and the
+   * two must not be reported to the user the same way.
+   */
+  constructor(
+    message: string,
+    readonly kind: "empty" | "invalid" = "invalid",
+  ) {
     super(message);
     this.name = "PgnParseError";
   }
@@ -73,7 +81,7 @@ export function parsePgn(pgn: string): ParsedGame {
   const commentByFen = new Map(comments.map((c) => [c.fen, c.comment]));
 
   if (history.length === 0) {
-    throw new PgnParseError("PGN에 수가 없습니다.");
+    throw new PgnParseError("수가 기록되지 않은 게임입니다(중단된 대국).", "empty");
   }
 
   const moves: ParsedMove[] = history.map((move, index) => {

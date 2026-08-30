@@ -42,6 +42,11 @@ const FILTERS = {
     { value: "analyzed", label: "분석 완료" },
     { value: "unanalyzed", label: "미분석" },
   ],
+  opponent: [
+    { value: "all", label: "전체" },
+    { value: "human", label: "실전만" },
+    { value: "practice", label: "코치·봇" },
+  ],
 } as const;
 
 const PERIODS = [
@@ -61,6 +66,7 @@ export default function GamesPage() {
     color: "all",
     timeClass: "all",
     analysis: "all",
+    opponent: "all",
     period: "all",
   });
 
@@ -81,6 +87,7 @@ export default function GamesPage() {
     if (filters.color !== "all") params.set("color", filters.color);
     if (filters.timeClass !== "all") params.set("timeClass", filters.timeClass);
     if (filters.analysis !== "all") params.set("analysis", filters.analysis);
+    if (filters.opponent !== "all") params.set("opponent", filters.opponent);
     if (filters.period !== "all") {
       // Read the clock here, not during render: the cutoff must be computed
       // once per fetch, not recalculated on every re-render.
@@ -103,7 +110,13 @@ export default function GamesPage() {
   }, [load]);
 
   const unanalyzed = useMemo(
-    () => (games ?? []).filter((g) => g.analysisStatus !== "completed" && g.rules === "chess"),
+    () =>
+      (games ?? []).filter(
+        (g) =>
+          g.analysisStatus !== "completed" &&
+          g.rules === "chess" &&
+          g.opponentKind === "human",
+      ),
     [games],
   );
 
@@ -166,6 +179,7 @@ export default function GamesPage() {
               ["색", "color", FILTERS.color],
               ["시간 형식", "timeClass", FILTERS.timeClass],
               ["분석", "analysis", FILTERS.analysis],
+              ["상대", "opponent", FILTERS.opponent],
             ] as const
           ).map(([label, key, options]) => (
             <div key={key} role="group" aria-label={label}>
@@ -242,6 +256,13 @@ export default function GamesPage() {
                     <span className="ml-1.5 text-xs text-ink-faint">
                       {g.playerColor === "white" ? "백" : "흑"}
                     </span>
+                    {g.opponentKind !== "human" && (
+                      <span className="ml-1.5">
+                        <Badge tone="neutral">
+                          {g.opponentKind === "coach" ? "코치" : "봇"}
+                        </Badge>
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-ink-faint">
                     {g.ratingDiff === null ? "–" : g.ratingDiff > 0 ? `+${g.ratingDiff}` : g.ratingDiff}
@@ -261,7 +282,15 @@ export default function GamesPage() {
                         리뷰 보기
                       </Link>
                     ) : g.analysisStatus === "skipped" ? (
-                      <Badge tone="neutral">변형 체스</Badge>
+                      <span title={g.analysisError ?? undefined}>
+                        <Badge tone="neutral">
+                          {g.rules !== "chess"
+                            ? "변형 체스"
+                            : g.opponentKind !== "human"
+                              ? "연습 게임"
+                              : "중단된 대국"}
+                        </Badge>
+                      </span>
                     ) : g.analysisStatus === "failed" ? (
                       <span title={g.analysisError ?? undefined}>
                         <Badge tone="loss">실패</Badge>

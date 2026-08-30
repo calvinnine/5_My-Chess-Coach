@@ -15,6 +15,7 @@ export interface GameListItem {
   timeControl: string;
   rated: boolean;
   rules: string;
+  opponentKind: "human" | "coach" | "bot";
   playerColor: "white" | "black";
   playerRating: number | null;
   opponentUsername: string;
@@ -160,6 +161,7 @@ export interface DashboardResponse {
   username: string;
   displayName: string;
   totalGames: number;
+  practiceGames: number;
   analyzedGames: number;
   pendingGames: number;
   hasEnoughSample: boolean;

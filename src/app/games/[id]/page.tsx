@@ -192,7 +192,7 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
           >
             Chess.com에서 보기
           </a>
-          {game.analysisStatus !== "completed" && (
+          {game.analysisStatus !== "completed" && game.opponentKind === "human" && (
             <Button onClick={() => void analyze()} disabled={analyzing || game.rules !== "chess"}>
               {analyzing ? "분석 중…" : "이 게임 분석"}
             </Button>
@@ -201,12 +201,23 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
       </header>
 
       {error && <ErrorNote>{error}</ErrorNote>}
-      {game.parseError && (
-        <ErrorNote>
-          이 게임의 PGN을 해석하지 못했습니다({game.parseError}). 원본 PGN은 그대로 보관되어
-          있습니다.
-        </ErrorNote>
+      {game.opponentKind !== "human" && (
+        <p className="rounded-lg bg-surface-sunken px-3.5 py-2.5 text-sm text-ink-soft">
+          {game.opponentKind === "coach" ? "코치" : "봇"}와 둔 연습 게임입니다. 기록은 보관하지만
+          분석과 누적 통계에서는 제외합니다.
+        </p>
       )}
+      {game.parseError &&
+        (game.analysisStatus === "skipped" ? (
+          <p className="rounded-lg bg-surface-sunken px-3.5 py-2.5 text-sm text-ink-soft">
+            {game.parseError} 분석할 수가 없어 건너뛰었고, 원본 PGN은 그대로 보관되어 있습니다.
+          </p>
+        ) : (
+          <ErrorNote>
+            이 게임의 PGN을 해석하지 못했습니다({game.parseError}). 원본 PGN은 그대로 보관되어
+            있습니다.
+          </ErrorNote>
+        ))}
 
       {review?.overallSummary && (
         <Card className="prose-coach border-gold/25 bg-gold-soft/40">

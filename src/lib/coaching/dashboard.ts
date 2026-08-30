@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   gameReviews,
@@ -34,6 +34,8 @@ export interface DashboardData {
   username: string;
   displayName: string;
   totalGames: number;
+  /** Coach and bot games, excluded from every figure above. */
+  practiceGames: number;
   analyzedGames: number;
   pendingGames: number;
   hasEnoughSample: boolean;
@@ -93,12 +95,24 @@ export function buildDashboard(playerId: number): DashboardData | null {
   const player = db.select().from(players).where(eq(players.id, playerId)).get();
   if (!player) return null;
 
+  /*
+   * Coaching statistics use games against real opponents only. Coach and bot
+   * training games are still stored and browsable, but including them would
+   * distort win rates, opening records, and every pattern threshold.
+   */
   const allGames = db
     .select()
     .from(games)
-    .where(eq(games.playerId, playerId))
+    .where(and(eq(games.playerId, playerId), eq(games.opponentKind, "human")))
     .orderBy(desc(games.playedAt))
     .all();
+
+  const practiceGameCount =
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(games)
+      .where(and(eq(games.playerId, playerId), ne(games.opponentKind, "human")))
+      .get()?.count ?? 0;
 
   const analyzed = allGames.filter((g) => g.analysisStatus === "completed");
   const pending = allGames.filter((g) => g.analysisStatus === "pending");
@@ -227,6 +241,7 @@ export function buildDashboard(playerId: number): DashboardData | null {
     username: player.username,
     displayName: player.displayName,
     totalGames: allGames.length,
+    practiceGames: practiceGameCount,
     analyzedGames: analyzed.length,
     pendingGames: pending.length,
     hasEnoughSample: analyzed.length >= MIN_SAMPLE_GAMES,

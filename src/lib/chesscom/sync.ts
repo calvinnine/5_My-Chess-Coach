@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { games, playerRatings, players, syncCache } from "@/db/schema";
-import { openingFamily, openingNameFromEcoUrl, parsePgn } from "@/lib/pgn/parse";
+import { openingFamily, openingNameFromEcoUrl, parsePgn, PgnParseError } from "@/lib/pgn/parse";
 import {
   ChessComClient,
   ChessComError,
@@ -12,6 +12,7 @@ import {
 } from "./client";
 import type { ChessComGame } from "./schemas";
 import { resultFor, TERMINATION_LABELS } from "./result";
+import { classifyOpponent } from "./opponent";
 
 const DEFAULT_FIRST_RUN_MONTHS = 3;
 
@@ -143,6 +144,8 @@ export interface SyncSummary {
   inserted: number;
   duplicates: number;
   skippedVariants: number;
+  abortedGames: number;
+  practiceGames: number;
   parseFailures: number;
   rejectedBySchema: number;
   errors: string[];
@@ -174,6 +177,8 @@ export async function syncPlayerGames(
     inserted: 0,
     duplicates: 0,
     skippedVariants: 0,
+    abortedGames: 0,
+    practiceGames: 0,
     parseFailures: 0,
     rejectedBySchema: 0,
     errors: [],
@@ -240,6 +245,8 @@ export async function syncPlayerGames(
         insertedThisMonth++;
       } else if (outcome === "duplicate") summary.duplicates++;
       else if (outcome === "variant") summary.skippedVariants++;
+      else if (outcome === "no_moves") summary.abortedGames++;
+      else if (outcome === "practice") summary.practiceGames++;
       else if (outcome === "parse_failed") {
         summary.inserted++;
         summary.parseFailures++;
@@ -275,7 +282,14 @@ export async function syncPlayerGames(
   return summary;
 }
 
-type StoreOutcome = "inserted" | "duplicate" | "variant" | "parse_failed" | "invalid";
+type StoreOutcome =
+  | "inserted"
+  | "duplicate"
+  | "variant"
+  | "parse_failed"
+  | "no_moves"
+  | "practice"
+  | "invalid";
 
 function storeGame(
   playerId: number,
@@ -305,8 +319,12 @@ function storeGame(
 
   const rules = game.rules ?? "chess";
   const isStandard = rules === "chess";
+  // Coach and bot training games say nothing about play against real opponents.
+  const opponentKind = classifyOpponent(game.pgn);
+  const isHuman = opponentKind === "human";
 
   let parseError: string | null = null;
+  let noMoves = false;
   let finalFen: string | null = game.fen ?? null;
   let ecoCode: string | null = game.eco ?? null;
   let openingName: string | null = null;
@@ -318,6 +336,7 @@ function storeGame(
   } catch (err) {
     // Keep the raw PGN and record why it could not be read.
     parseError = err instanceof Error ? err.message : "PGN 파싱 실패";
+    noMoves = err instanceof PgnParseError && err.kind === "empty";
     openingName = openingNameFromEcoUrl(undefined);
   }
 
@@ -331,6 +350,7 @@ function storeGame(
       timeClass: game.time_class ?? "unknown",
       timeControl: game.time_control ?? "unknown",
       rules,
+      opponentKind,
       rated: game.rated ?? false,
       playerColor,
       playerRating: side.rating ?? null,
@@ -343,13 +363,23 @@ function storeGame(
       pgn: game.pgn,
       finalFen,
       chesscomAccuracy: typeof accuracy === "number" ? accuracy : null,
-      analysisStatus: !isStandard ? "skipped" : parseError ? "failed" : "pending",
-      analysisError: parseError,
+      // An aborted game has nothing to analyse; that is "skipped", not "failed".
+      analysisStatus:
+        !isStandard || noMoves || !isHuman
+          ? "skipped"
+          : parseError
+            ? "failed"
+            : "pending",
+      analysisError: isHuman
+        ? parseError
+        : "코치·봇 연습 게임은 분석 대상에서 제외합니다.",
       parseError,
     })
     .run();
 
   if (!isStandard) return "variant";
+  if (!isHuman) return "practice";
+  if (noMoves) return "no_moves";
   return parseError ? "parse_failed" : "inserted";
 }
 

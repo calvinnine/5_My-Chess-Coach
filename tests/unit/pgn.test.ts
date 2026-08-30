@@ -63,6 +63,34 @@ describe("PGN parsing", () => {
 
   it("throws a typed error on an illegal move so the raw PGN can still be stored", () => {
     expect(() => parsePgn(ILLEGAL_MOVE_PGN)).toThrow(PgnParseError);
+    try {
+      parsePgn(ILLEGAL_MOVE_PGN);
+    } catch (err) {
+      expect((err as PgnParseError).kind).toBe("invalid");
+    }
+  });
+
+  it("separates an aborted game from a genuinely broken PGN", () => {
+    /*
+     * Chess.com records aborted games with headers but no moves. That is a
+     * normal record, not a parse failure, and it must not surface to the user
+     * as an error.
+     */
+    const aborted = `[Event "Live Chess"]
+[Site "Chess.com"]
+[White "alice"]
+[Black "bob"]
+[Result "1/2-1/2"]
+[CurrentPosition "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+
+1/2-1/2`;
+    try {
+      parsePgn(aborted);
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(PgnParseError);
+      expect((err as PgnParseError).kind).toBe("empty");
+    }
   });
 });
 

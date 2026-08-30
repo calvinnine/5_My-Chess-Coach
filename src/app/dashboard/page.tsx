@@ -111,8 +111,14 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{data.displayName}</h1>
           <p className="mt-0.5 text-sm text-ink-soft">
-            저장된 게임 {data.totalGames}판 · 분석 완료 {data.analyzedGames}판 · 미분석{" "}
+            실전 {data.totalGames}판 · 분석 완료 {data.analyzedGames}판 · 미분석{" "}
             {data.pendingGames}판
+            {data.practiceGames > 0 && (
+              <span className="text-ink-faint">
+                {" "}
+                · 코치·봇 연습 {data.practiceGames}판은 통계에서 제외
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">

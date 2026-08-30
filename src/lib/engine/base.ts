@@ -28,10 +28,15 @@ export interface LineEngineOptions {
    * reject or ignore `setoption name Threads`, so it is not sent for them.
    */
   supportsThreads?: boolean;
+  /** How long to wait for `bestmove` before giving up on a search. */
+  searchTimeoutMs?: number;
 }
 
 const READY_TIMEOUT_MS = 20_000;
 const HANDSHAKE_TIMEOUT_MS = 30_000;
+const DEFAULT_SEARCH_TIMEOUT_MS = 120_000;
+/** Short: this only has to catch up with an engine that is already running. */
+const RESYNC_TIMEOUT_MS = 10_000;
 
 /**
  * The UCI conversation, independent of how the engine is hosted.
@@ -133,7 +138,10 @@ export abstract class LineEngine implements AnalysisEngine {
 
       const bestMove = this.waitFor(
         (l) => l.startsWith("bestmove"),
-        Math.max(120_000, (opts.movetimeMs ?? 0) * 4),
+        Math.max(
+          this.options.searchTimeoutMs ?? DEFAULT_SEARCH_TIMEOUT_MS,
+          (opts.movetimeMs ?? 0) * 4,
+        ),
       );
 
       // Aborting asks the engine to stop searching; it still answers bestmove,
@@ -149,6 +157,9 @@ export abstract class LineEngine implements AnalysisEngine {
             : `go depth ${opts.depth ?? 16}`,
         );
         await bestMove;
+      } catch (err) {
+        await this.resynchronise();
+        throw err;
       } finally {
         this.listeners.delete(collector);
         opts.signal?.removeEventListener("abort", abortHandler);
@@ -167,19 +178,57 @@ export abstract class LineEngine implements AnalysisEngine {
     return next;
   }
 
-  async stop() {
-    this.closed = true;
+  /**
+   * Brings the engine back to a known state after a search failed to report.
+   *
+   * A timed-out search is still running inside the engine. Left alone, the next
+   * `go` collides with it — Stockfish ignores `position` while searching, so the
+   * following `bestmove` answers for the *previous* position and gets recorded
+   * against the wrong ply. That is worse than the failure that caused it,
+   * because nothing looks broken afterwards.
+   *
+   * If the engine cannot be brought back, its transport is discarded so the
+   * next call starts a fresh one.
+   */
+  private async resynchronise() {
+    try {
+      const drained = this.waitFor(
+        (l) => l.startsWith("bestmove"),
+        RESYNC_TIMEOUT_MS,
+      ).catch(() => undefined);
+      this.send("stop");
+      await drained;
+
+      const ready = this.waitFor((l) => l === "readyok", RESYNC_TIMEOUT_MS);
+      this.send("isready");
+      await ready;
+    } catch {
+      await this.discardTransport();
+    }
+  }
+
+  /** Tears the transport down without closing the engine for good. */
+  private async discardTransport() {
     const transport = this.transport;
     this.transport = null;
     this.started = false;
-    this.listeners.clear();
     if (!transport) return;
     try {
       transport.write("quit");
     } catch {
       // Already gone.
     }
-    await transport.dispose();
+    try {
+      await transport.dispose();
+    } catch {
+      // Best effort: the next call creates a fresh transport regardless.
+    }
+  }
+
+  async stop() {
+    this.closed = true;
+    this.listeners.clear();
+    await this.discardTransport();
   }
 
   get isRunning() {

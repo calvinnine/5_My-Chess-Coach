@@ -70,7 +70,7 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 |---|---|
 | lint | 통과 (0 errors, 0 warnings) |
 | typecheck | 통과 |
-| unit (Vitest) | 108 passed |
+| unit (Vitest) | 113 passed |
 | e2e (Playwright) | 9 passed |
 | build | 통과 |
 
@@ -95,8 +95,23 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 - [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
 - [ ] Phase C — 다중 사용자 저장소(Turso 우선), 전역 API 큐, 어뷰즈 상한
 
+## 맥북에서 이어서 하기
+
+**주의**: 분석 데이터는 git에 없다(`data/*.db`는 .gitignore). 코드만 clone하면
+빈 DB에서 시작한다.
+
+1. `git clone https://github.com/calvinnine/5_My-Chess-Coach && npm install`
+2. `brew install stockfish`
+3. 분석 결과를 옮기려면 이 맥의 `data/backups/chess-coach-*.db` 최신 파일을
+   맥북의 `data/chess-coach.db`로 복사. **옮기지 않으면** `npm run db:migrate` 후
+   사용자명(Calvinnine)만 다시 등록하면 동기화는 1분이면 끝나지만 **분석 37판은
+   다시 돌려야 한다.**
+4. `npm run dev` → http://localhost:3117
+5. 남은 591판 분석: `caffeinate -i ./scripts/analyze-all.sh`
+   (`caffeinate -i`는 필수 — 유휴 절전이 분석을 망친다, D17 참고)
+
 ## 다음 할 일
 
-- [ ] 남은 실전 599판 일괄 분석 진행 중 (`scripts/analyze-all.sh` 백그라운드)
-- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 25판)
+- [ ] 남은 실전 591판 일괄 분석 (중단됨, 위 5번으로 재개)
+- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 37판)
 - [ ] (선택) Phase 5 LLM 계층

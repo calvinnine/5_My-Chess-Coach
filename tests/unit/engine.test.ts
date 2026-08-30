@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
-import { locateEngine } from "@/lib/engine/locate";
-import { parseInfoLine, UciEngine } from "@/lib/engine/uci";
+import { isPackageShim, locateEngine } from "@/lib/engine/locate";
+import { UciEngine } from "@/lib/engine/uci";
+import { parseInfoLine } from "@/lib/engine/types";
 import { analyzeGame, PRESETS } from "@/lib/analysis/analyzer";
 import { buildReview, collapsePly, importanceOf, selectTurningPoints } from "@/lib/analysis/review";
 import { toClampedCp } from "@/lib/analysis/eval";
@@ -19,6 +20,29 @@ const withEngine = location.found ? describe : describe.skip;
 
 // Fast settings: these tests check correctness of the pipeline, not depth.
 const FAST = { ...PRESETS.fast, depth: 8, keyMomentDepth: 10 };
+
+describe("engine location", () => {
+  /*
+   * Regression: installing the `stockfish` npm package (for the WASM build)
+   * adds node_modules/.bin/stockfish, and npm puts that directory first on
+   * PATH. Auto-detection then silently returned the WASM shim instead of the
+   * user's real engine, which would mix two engines inside one dataset.
+   */
+  it("rejects a binary inside node_modules", () => {
+    expect(isPackageShim("/repo/node_modules/.bin/stockfish")).toBe(true);
+    expect(isPackageShim("/repo/node_modules/stockfish/scripts/cli.js")).toBe(true);
+  });
+
+  it("accepts a real installed binary", () => {
+    expect(isPackageShim("/opt/homebrew/bin/stockfish")).toBe(false);
+    expect(isPackageShim("/usr/local/bin/stockfish")).toBe(false);
+  });
+
+  it("does not auto-detect a packaged shim", () => {
+    const found = locateEngine();
+    if (found.found) expect(isPackageShim(found.path!)).toBe(false);
+  });
+});
 
 describe("UCI info parsing", () => {
   it("reads depth, multipv, score and pv", () => {

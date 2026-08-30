@@ -1,4 +1,4 @@
-import type { RawScore } from "@/lib/engine/uci";
+import type { RawScore } from "@/lib/engine/types";
 
 export type Color = "white" | "black";
 

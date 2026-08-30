@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const COMMON_PATHS = [
@@ -13,6 +14,19 @@ export interface EngineLocation {
   path: string | null;
   version: string | null;
   source: "env" | "setting" | "path" | "common" | "none";
+}
+
+/*
+ * Anything inside node_modules is a package's own shim, not the user's engine.
+ * The `stockfish` npm package (used for the WASM build) installs a CLI shim at
+ * node_modules/.bin/stockfish, and npm puts that directory first on PATH — so
+ * without this guard, `which stockfish` silently returns the WASM build and the
+ * app changes engines mid-dataset without anyone noticing.
+ */
+export function isPackageShim(candidate: string): boolean {
+  return path.sep === "/"
+    ? candidate.includes("/node_modules/")
+    : /[\\/]node_modules[\\/]/.test(candidate);
 }
 
 function probeVersion(binary: string): string | null {
@@ -54,6 +68,9 @@ export function locateEngine(configuredPath?: string | null): EngineLocation {
 
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate.path)) continue;
+    // An explicitly configured path is honoured even inside node_modules;
+    // auto-detection never is.
+    if (candidate.source !== "setting" && isPackageShim(candidate.path)) continue;
     const version = probeVersion(candidate.path);
     if (version) {
       return { found: true, path: candidate.path, version, source: candidate.source };

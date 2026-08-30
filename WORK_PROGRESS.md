@@ -70,7 +70,7 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 |---|---|
 | lint | 통과 (0 errors, 0 warnings) |
 | typecheck | 통과 |
-| unit (Vitest) | 97 passed |
+| unit (Vitest) | 108 passed |
 | e2e (Playwright) | 9 passed |
 | build | 통과 |
 
@@ -89,12 +89,14 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
   임계값(50cp)보다 작아 큰 판단(중대 실수·핵심 장면)은 흔들리지 않음.
 - 7MB(전체 빌드는 108MB), COOP/COEP 헤더 불필요.
 
-- [ ] Phase A — `AnalysisEngine` 인터페이스 분리, `WasmEngine` 추가 (테스트 97개 유지)
+- [x] **Phase A 완료** — `AnalysisEngine` 인터페이스, `LineEngine` 공통 베이스,
+      `WasmEngine` 추가. 판정·코칭 로직 변경 0줄. 테스트 97 → 108개.
+      교차 검증: 평가 차 중앙값 < 50cp, 승패 방향 일치 > 90%, 분기점 정확히 일치.
 - [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
 - [ ] Phase C — 다중 사용자 저장소(Turso 우선), 전역 API 큐, 어뷰즈 상한
 
 ## 다음 할 일
 
-- [ ] 남은 실전 616판 일괄 분석 진행 중 (`scripts/analyze-all.sh` 백그라운드)
-- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 11판)
+- [ ] 남은 실전 599판 일괄 분석 진행 중 (`scripts/analyze-all.sh` 백그라운드)
+- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 25판)
 - [ ] (선택) Phase 5 LLM 계층

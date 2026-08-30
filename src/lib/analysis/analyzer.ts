@@ -1,5 +1,9 @@
 import { Chess, type Square } from "chess.js";
-import { AbortError, UciEngine, type PvLine } from "@/lib/engine/uci";
+import {
+  AbortError,
+  type AnalysisEngine,
+  type PvLine,
+} from "@/lib/engine/types";
 import { parsePgn, phaseFor, type ParsedGame } from "@/lib/pgn/parse";
 import {
   centipawnLoss,
@@ -115,7 +119,10 @@ function evalFromLine(line: PvLine | undefined, fen: string, player: Color): Nor
 }
 
 /**
- * Runs Stockfish over one game and produces per-ply records.
+ * Runs an engine over one game and produces per-ply records.
+ *
+ * Works against any `AnalysisEngine`: local Stockfish over a pipe, or the WASM
+ * build in a browser worker. Nothing in this function is runtime-specific.
  *
  * Every position is evaluated exactly once: the evaluation of position *i* is
  * simultaneously "after move i" and "before move i+1". All evaluations leaving
@@ -124,7 +131,7 @@ function evalFromLine(line: PvLine | undefined, fen: string, player: Color): Nor
 export async function analyzeGame(
   pgn: string,
   playerColor: Color,
-  engine: UciEngine,
+  engine: AnalysisEngine,
   settings: AnalysisSettings,
   options: { signal?: AbortSignal; onProgress?: (p: AnalyzeProgress) => void } = {},
 ): Promise<AnalyzeGameResult> {

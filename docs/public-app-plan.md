@@ -222,18 +222,31 @@ export interface AnalysisEngine {
 
 각 단계는 **그 자체로 동작하는 상태**로 끝난다.
 
-### Phase A — 엔진 추상화 (로컬에서 검증)
-1. `AnalysisEngine` 인터페이스 도입, `UciEngine`에 `implements` 부착
-2. `analyzer.ts` 시그니처를 인터페이스로 변경
-3. **기존 테스트 97개가 그대로 통과해야 한다** — 이게 이 단계의 완료 기준
-4. `WasmEngine` 구현 + Node에서 동일 인터페이스로 동작 확인
-5. 고정 PGN으로 네이티브/WASM 결과 대조 테스트 추가
+### ✅ Phase A — 엔진 추상화 (완료)
+1. ✅ `engine/types.ts` — 런타임 비의존 타입 + UCI 파싱 + `AnalysisEngine`
+2. ✅ `engine/base.ts` — `LineEngine`이 UCI 대화 전체를 담당, 하위 클래스는
+   transport만 제공
+3. ✅ `UciEngine`(파이프) / `WasmEngine`(Worker) 두 구현
+4. ✅ `analyzer.ts`가 인터페이스에 의존 — 판정·코칭 로직 변경 0
+5. ✅ 교차 검증 테스트 `tests/unit/engine-parity.test.ts`
 
-완료 기준: 같은 게임을 두 엔진으로 분석했을 때 핵심 장면이 대체로 일치하고,
-평가 차가 임계값 안에 든다.
+**측정된 완료 기준**:
+- 기존 테스트 전부 통과 (97 → 108개로 증가)
+- 같은 게임 평가 차 중앙값 < 50cp
+- 승패 방향 일치 > 90%
+- **결정적 장면(분기점) 정확히 일치**
 
-### Phase B — 브라우저 분석 경로
-1. Web Worker + `lite-single` 로딩 (7MB 캐시 전략 포함)
+발견한 함정 (D16): `stockfish` npm 패키지가 `node_modules/.bin/stockfish` 심링크를
+만들어 자동 탐지가 네이티브 대신 WASM을 잡았다. `locateEngine`이 node_modules를
+건너뛰도록 수정.
+
+주의: vitest 워커 하나에 WASM 엔진 인스턴스를 둘 만들면 죽는다. 파일을 분리해
+워커당 하나만 뜨게 했다.
+
+### Phase B — 브라우저 분석 경로 (다음)
+0. 빌드 시 `node_modules/stockfish/bin/stockfish-18-lite-single.{js,wasm}` 를
+   `public/engine/` 로 복사 (패키지 전체 239MB 중 7MB만 배포)
+1. `createBrowserEngine("/engine/stockfish-18-lite-single.js")` 연결
 2. 진행률 UI를 서버 폴링에서 워커 메시지로 전환
 3. 결과 업로드 API + 서버측 검증
 4. 엔진 없는 환경(구형 브라우저) 안내

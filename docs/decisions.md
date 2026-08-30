@@ -75,3 +75,27 @@ Chess.com 코치 게임은 `[Event "Play vs Coach"]`, 봇 게임은
 "퀸가 충분한 보호 없이 남았습니다"처럼 조사가 틀린 문장이 실제 리뷰에 나왔다.
 `src/lib/korean.ts`의 `withParticle`이 한글 음절의 종성 인덱스
 (`(code - 0xAC00) % 28`)로 이/가, 은/는, 을/를, 과/와를 고른다.
+
+## D15. 엔진을 인터페이스 뒤로 숨기고 UCI 대화를 한 곳에 모음
+브라우저 전환(공개 서비스)을 위해 `analyzer`가 구체 클래스(`UciEngine`) 대신
+`AnalysisEngine` 인터페이스에 의존하게 했다. 더 중요한 문제는 **순수 모듈이 Node
+전용 모듈을 끌어오고 있었다는 것**이다: `analysis/eval.ts`가 타입 하나 때문에
+`engine/uci.ts`를 import했고, 그 파일은 `node:child_process`를 쓴다. 브라우저
+번들에 Node 모듈이 딸려온다. 타입·프로토콜 파싱을 런타임 비의존 모듈
+`engine/types.ts`로 옮겼다.
+
+UCI 대화(핸드셰이크, waitFor, 검색 직렬화, abort 처리)는 `engine/base.ts`의
+`LineEngine`에 모았다. 두 엔진이 각자 프로토콜을 구현하면 시간이 지나며 갈라지고,
+그 차이는 "분석이 좀 이상한데" 수준으로만 드러나 발견이 늦다. 하위 클래스는
+transport(파이프 / Web Worker)만 제공한다.
+
+## D16. 자동 탐지는 node_modules 안의 실행 파일을 무시
+WASM 빌드를 쓰려고 `stockfish` npm 패키지를 설치했더니
+`node_modules/.bin/stockfish` 심링크가 생겼고, npm이 그 디렉터리를 PATH 앞에
+붙이기 때문에 `which stockfish`가 **네이티브 대신 WASM 셸을 반환**했다. 서버가
+실제로 그걸 잡았다(확인함). 그대로 뒀으면 진행 중이던 616판 분석이 도중에 다른
+엔진으로 바뀌어 **한 데이터셋 안에 두 엔진이 섞일 뻔했다** — centipawn 손실 기준이
+달라져 패턴 집계가 오염된다.
+
+`locateEngine`이 `node_modules` 경로를 건너뛴다. 단, 사용자가 설정에서 명시한
+경로는 그대로 존중한다(의도적 선택일 수 있으므로). 회귀 테스트 있음.

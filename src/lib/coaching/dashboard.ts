@@ -317,6 +317,7 @@ export function savePatterns(playerId: number, computed: AggregatedPattern[]) {
           label: p.label,
           description: p.description,
           sampleSize: p.sampleSize,
+          windowSize: p.windowSize,
           occurrenceCount: p.occurrenceCount,
           gameCount: p.gameCount,
           distinctOpenings: p.distinctOpenings,

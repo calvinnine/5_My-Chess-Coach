@@ -1,0 +1,1 @@
+ALTER TABLE `patterns` ADD `window_size` integer DEFAULT 0 NOT NULL;

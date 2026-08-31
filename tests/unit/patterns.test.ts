@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregatePatterns,
   CONFIRMED_MIN_GAMES,
+  CONFIRMED_WINDOW,
   MIN_SAMPLE_GAMES,
   topWeaknesses,
   type PatternGameInput,
@@ -81,6 +82,38 @@ describe("sample-size guardrails", () => {
   });
 });
 
+describe("reported counts describe the window they came from", () => {
+  /*
+   * Regression: counts are gathered over the recent window (30 games) but were
+   * being reported against the total analysed sample. With 314 games analysed,
+   * "20 of the last 30" was shown as "20 of 314" — a real weakness read as a
+   * rare one.
+   */
+  it("reports a window no larger than the confirmed window", () => {
+    const games = Array.from({ length: 120 }, (_, i) => game(i + 1, ["hanging_piece"]));
+    const [pattern] = aggregatePatterns(games);
+    expect(pattern.sampleSize).toBe(120);
+    expect(pattern.windowSize).toBe(CONFIRMED_WINDOW);
+    // Every counted game has to fit inside the window it claims to cover.
+    expect(pattern.gameCount).toBeLessThanOrEqual(pattern.windowSize);
+  });
+
+  it("uses the whole sample as the window while below it", () => {
+    const games = Array.from({ length: 12 }, (_, i) => game(i + 1, ["hanging_piece"]));
+    const [pattern] = aggregatePatterns(games);
+    expect(pattern.sampleSize).toBe(12);
+    expect(pattern.windowSize).toBe(12);
+  });
+
+  it("keeps severity consistent with the reported window", () => {
+    // Present in every game of the window: frequency is 1, not 30/120.
+    const games = Array.from({ length: 120 }, (_, i) => game(i + 1, ["hanging_piece"]));
+    const [pattern] = aggregatePatterns(games);
+    expect(pattern.gameCount / pattern.windowSize).toBe(1);
+    expect(pattern.severityScore).toBeGreaterThan(50);
+  });
+});
+
 describe("determinism", () => {
   it("produces identical scores for the same input regardless of input order", () => {
     const games = [
@@ -145,6 +178,40 @@ describe("training tasks", () => {
     );
     const tasks = buildTrainingTasks(aggregatePatterns(games), games.length);
     expect(tasks.length).toBeLessThanOrEqual(3);
+  });
+
+  it("scales the completion target to the games actually being checked", () => {
+    /*
+     * Regression: the target was half the window's game count, so a weakness
+     * seen in 20 of the last 30 games produced "10 or fewer over the next 5
+     * games" — a target larger than the check itself, which can never fail.
+     */
+    const games = Array.from({ length: 40 }, (_, i) =>
+      game(i + 1, ["hanging_piece", "hanging_piece"], {
+        opening: i % 2 === 0 ? "Sicilian Defense" : "French Defense",
+      }),
+    );
+    const patterns = aggregatePatterns(games);
+    const tasks = buildTrainingTasks(patterns, games.length);
+    const pattern = patterns.find((p) => p.tag === "hanging_piece")!;
+
+    const target = Number(/(\d+)회 이하/.exec(tasks[0].completionCriteria)![1]);
+    const expectedInFiveGames = (pattern.occurrenceCount / pattern.windowSize) * 5;
+    // Halving the current rate, and never more than the rate itself.
+    expect(target).toBeLessThan(expectedInFiveGames);
+    expect(target).toBeGreaterThanOrEqual(0);
+  });
+
+  it("cites the window, not the whole sample, as evidence", () => {
+    const games = Array.from({ length: 60 }, (_, i) =>
+      game(i + 1, ["hanging_piece"], {
+        opening: i % 2 === 0 ? "Sicilian Defense" : "French Defense",
+      }),
+    );
+    const patterns = aggregatePatterns(games);
+    const tasks = buildTrainingTasks(patterns, games.length);
+    expect(tasks[0].instruction).toContain(`최근 ${CONFIRMED_WINDOW}판 중`);
+    expect(tasks[0].instruction).toContain("분석 표본 60판");
   });
 
   it("makes every task measurable", () => {

@@ -11,6 +11,22 @@ export interface TrainingTaskDraft {
   completionCriteria: string;
 }
 
+/** How many games the follow-up check covers. */
+const CHECK_GAMES = 5;
+
+/**
+ * A halving target, scaled to the check window.
+ *
+ * The occurrence counts describe the recent window (30 games), so they cannot
+ * be compared directly against a 5-game follow-up. This converts to a per-game
+ * rate first; without it the target came out larger than the number of games
+ * being checked.
+ */
+function targetOccurrences(pattern: AggregatedPattern): number {
+  const perGame = pattern.occurrenceCount / Math.max(1, pattern.windowSize);
+  return Math.max(0, Math.round((perGame * CHECK_GAMES) / 2));
+}
+
 /** How easy each weakness is to fix by changing behaviour, not knowledge. */
 const FIXABILITY: Record<string, number> = {
   missed_opponent_threat: 1,
@@ -87,13 +103,13 @@ export function buildTrainingTasks(
       patternTag: pattern.tag,
       title: `${pattern.label} 교정`,
       instruction: [
-        `근거: 최근 ${pattern.sampleSize}판 중 ${pattern.gameCount}판에서 ${pattern.occurrenceCount}회 발생.`,
+        `근거: 최근 ${pattern.windowSize}판 중 ${pattern.gameCount}판에서 ${pattern.occurrenceCount}회 발생 (분석 표본 ${pattern.sampleSize}판).`,
         `행동 과제: ${def?.coaching ?? "체크리스트를 적용해 두기"}.`,
         `연습: 하루 15분씩 ${pattern.label} 주제 전술 ${puzzleCount}문제, 그리고 이 약점이 나온 실전 포지션 3개를 다시 계산하기.`,
       ].join(" "),
       targetCount: puzzleCount,
       targetMinutes: 15,
-      completionCriteria: `다음 래피드 5판에서 ${pattern.label} 발생 횟수가 ${Math.max(0, Math.floor(pattern.gameCount / 2))}회 이하로 줄어듦`,
+      completionCriteria: `다음 래피드 ${CHECK_GAMES}판에서 ${pattern.label} 발생 횟수가 ${targetOccurrences(pattern)}회 이하로 줄어듦`,
     };
   });
 }

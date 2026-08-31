@@ -27,7 +27,14 @@ export interface AggregatedPattern {
   description: string;
   patternType: "weakness" | "strength";
   status: PatternStatus;
+  /** Total analysed games available. Drives the observing/confirmed gate. */
   sampleSize: number;
+  /**
+   * How many games the counts below actually cover — the recent window, not the
+   * whole sample. Reporting `gameCount` against `sampleSize` understates the
+   * frequency badly: 20 of the last 30 is not 20 of 314.
+   */
+  windowSize: number;
   occurrenceCount: number;
   gameCount: number;
   distinctOpenings: number;
@@ -128,6 +135,7 @@ export function aggregatePatterns(games: PatternGameInput[]): AggregatedPattern[
       patternType: isStrength ? "strength" : "weakness",
       status,
       sampleSize,
+      windowSize: confirmedWindow.length,
       occurrenceCount: occurrences.length,
       gameCount: inConfirmed.length,
       distinctOpenings: openings.size,

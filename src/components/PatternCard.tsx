@@ -31,7 +31,7 @@ export default function PatternCard({ pattern }: { pattern: Pattern }) {
         )}
       </div>
       <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-        {pattern.description} 최근 {pattern.sampleSize}판 중 {pattern.gameCount}판에서{" "}
+        {pattern.description} 최근 {pattern.windowSize}판 중 {pattern.gameCount}판에서{" "}
         {pattern.occurrenceCount}회 나타났습니다.
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-ink-faint">
@@ -41,6 +41,7 @@ export default function PatternCard({ pattern }: { pattern: Pattern }) {
         </span>
         <span>신뢰도 {pattern.confidenceScore.toFixed(0)}%</span>
         <span>서로 다른 오프닝 {pattern.distinctOpenings}개</span>
+        <span>분석 표본 {pattern.sampleSize}판</span>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}

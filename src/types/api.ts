@@ -144,7 +144,10 @@ export interface Pattern {
   description: string;
   patternType: "weakness" | "strength";
   status: "observing" | "candidate" | "confirmed";
+  /** Total analysed games. */
   sampleSize: number;
+  /** Games the counts below cover — the recent window, not the whole sample. */
+  windowSize: number;
   occurrenceCount: number;
   gameCount: number;
   distinctOpenings: number;

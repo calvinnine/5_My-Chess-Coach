@@ -206,7 +206,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card
           title="반복 약점"
-          hint={`분석 ${data.analyzedGames}판 기준 · 근거 게임이 있는 항목만 표시합니다.`}
+          hint={`분석 ${data.analyzedGames}판 중 최근 30판 기준 · 근거 게임이 있는 항목만 표시합니다.`}
         >
           {data.weaknesses.length === 0 ? (
             <Empty>아직 반복이라 부를 만한 약점이 없습니다.</Empty>

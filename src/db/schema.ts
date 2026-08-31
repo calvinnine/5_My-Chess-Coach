@@ -165,8 +165,10 @@ export const patterns = sqliteTable(
     tag: text("tag").notNull(),
     label: text("label").notNull(),
     description: text("description").notNull(),
-    /** Number of analyzed games in the observation window. */
+    /** Total analysed games at the time this snapshot was computed. */
     sampleSize: integer("sample_size").notNull(),
+    /** Games the counts below cover — the recent window, not the whole sample. */
+    windowSize: integer("window_size").notNull().default(0),
     occurrenceCount: integer("occurrence_count").notNull(),
     /** How many distinct games it showed up in. */
     gameCount: integer("game_count").notNull(),

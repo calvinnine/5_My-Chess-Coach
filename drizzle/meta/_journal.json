@@ -15,6 +15,13 @@
       "when": 1788105498203,
       "tag": "0001_happy_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788213860437,
+      "tag": "0002_demonic_thanos",
+      "breakpoints": true
     }
   ]
 }

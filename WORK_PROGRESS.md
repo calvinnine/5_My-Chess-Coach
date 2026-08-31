@@ -70,11 +70,11 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 |---|---|
 | lint | 통과 (0 errors, 0 warnings) |
 | typecheck | 통과 |
-| unit (Vitest) | 113 passed |
+| unit (Vitest) | 118 passed |
 | e2e (Playwright) | 9 passed |
 | build | 통과 |
 
-실계정(Calvinnine) 검수: 652판 동기화 · 래피드 10판 분석 · 대시보드 생성까지 확인.
+실계정(Calvinnine) 검수: 652판 동기화 · **래피드 314판 분석 완료** · 대시보드 진단 확인.
 
 ---
 
@@ -95,23 +95,41 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 - [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
 - [ ] Phase C — 다중 사용자 저장소(Turso 우선), 전역 API 큐, 어뷰즈 상한
 
-## 맥북에서 이어서 하기
+## 현재 진단 (표본 314판)
+
+37판 기준 진단이 **그대로 유지**되고 신뢰도만 62~73% → **전부 100%** 로 올랐다.
+우연이 아니라 실제 성향으로 확정.
+
+| 확정 약점 | 최근 30판 중 | 오프닝 | 상대 |
+|---|---|---|---|
+| 포크 허용 | 20판 (28회) | 9종 | 17명 |
+| 걸린 기물 미확인 | 15판 (28회) | 7종 | 12명 |
+| 상대 위협 미확인 | 14판 (22회) | 8종 | 11명 |
+
+셋 다 뿌리가 같다 — **두기 전에 상대의 수를 보지 않는 습관.** 오프닝 9종·상대
+17명에 걸쳐 나오므로 특정 라인 문제가 아니다. 다만 Caro-Kann(흑 108판, 50%)에서
+특히 반복되며, 백 59% vs 흑 48% 격차와 연결된다.
+
+확정 강점: 정확한 유일수 발견(23판 70회), 위기 방어와 버티기(15판 111회).
+계산 자체는 되는데 계산을 시작하기 전 단계가 비어 있다는 그림.
+
+## 다른 기기에서 이어서 하기
 
 **주의**: 분석 데이터는 git에 없다(`data/*.db`는 .gitignore). 코드만 clone하면
 빈 DB에서 시작한다.
 
 1. `git clone https://github.com/calvinnine/5_My-Chess-Coach && npm install`
 2. `brew install stockfish`
-3. 분석 결과를 옮기려면 이 맥의 `data/backups/chess-coach-*.db` 최신 파일을
-   맥북의 `data/chess-coach.db`로 복사. **옮기지 않으면** `npm run db:migrate` 후
-   사용자명(Calvinnine)만 다시 등록하면 동기화는 1분이면 끝나지만 **분석 37판은
-   다시 돌려야 한다.**
+3. 분석 314판을 옮기려면 `data/backups/chess-coach-*.db` 최신 파일을 대상 기기의
+   `data/chess-coach.db`로 복사. **옮기지 않으면 314판을 처음부터 다시 돌려야 한다**
+   (약 9시간). 동기화 자체는 1분이면 끝난다.
 4. `npm run dev` → http://localhost:3117
-5. 남은 591판 분석: `caffeinate -i ./scripts/analyze-all.sh`
+5. 남은 307판 분석: `caffeinate -i ./scripts/analyze-all.sh`
    (`caffeinate -i`는 필수 — 유휴 절전이 분석을 망친다, D17 참고)
 
 ## 다음 할 일
 
-- [ ] 남은 실전 591판 일괄 분석 (중단됨, 위 5번으로 재개)
-- [ ] 100판 이상 분석 후 패턴 신뢰도 재확인 (현재 표본 37판)
+- [ ] 남은 실전 307판 분석 (중단됨, 위 5번으로 재개 · 판당 약 1.7분 → 약 9시간)
+- [ ] 타임아웃 실패 7판 재시도 (`analysis_status='failed'` → `pending`으로 되돌리면 됨)
+- [ ] Phase B — Web Worker 분석 경로
 - [ ] (선택) Phase 5 LLM 계층

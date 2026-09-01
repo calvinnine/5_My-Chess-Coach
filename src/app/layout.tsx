@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/games", label: "게임" },
+  { href: "/training", label: "훈련" },
   { href: "/settings", label: "설정" },
 ];
 

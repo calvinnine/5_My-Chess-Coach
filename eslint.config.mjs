@@ -28,6 +28,7 @@ const config = [
       // Bracketed route segments are glob character classes, so match the dir.
       "src/app/games/**/page.tsx",
       "src/app/settings/page.tsx",
+      "src/app/training/page.tsx",
       "src/components/AnalysisBar.tsx",
       "src/components/Onboarding.tsx",
     ],

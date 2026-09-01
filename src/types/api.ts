@@ -159,6 +159,37 @@ export interface Pattern {
   openingSpecific: string | null;
 }
 
+export type Perspective = "opening" | "tactics" | "strategy" | "endgame" | "habit";
+
+export interface PhaseAccuracy {
+  plies: number;
+  averageLossCp: number;
+  blunders: number;
+  mistakes: number;
+  blunderShare: number;
+  blundersPerGame: number;
+}
+
+export interface PerspectiveReport {
+  perspective: Perspective;
+  label: string;
+  headline: string;
+  phase: "opening" | "middlegame" | "endgame" | null;
+  accuracy: PhaseAccuracy | null;
+  weaknesses: Pattern[];
+  strengths: Pattern[];
+  drills: string[];
+  observing: boolean;
+}
+
+export interface Curriculum {
+  observing: boolean;
+  minSample: number;
+  analyzedGames: number;
+  priority: { perspective: Perspective; label: string; reason: string } | null;
+  reports: PerspectiveReport[];
+}
+
 export interface ColourRepertoire {
   color: "white" | "black";
   sampleSize: number;
@@ -188,6 +219,8 @@ export interface DashboardResponse {
     mistakesPerGame: number | null;
     inaccuraciesPerGame: number | null;
   };
+  phaseAccuracy: Record<"opening" | "middlegame" | "endgame", PhaseAccuracy | null>;
+  curriculum: Curriculum;
   repertoire: {
     white: ColourRepertoire;
     black: ColourRepertoire;

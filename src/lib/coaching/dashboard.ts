@@ -20,6 +20,7 @@ import {
   type AggregatedPattern,
   type PatternGameInput,
 } from "./patterns";
+import { buildCurriculum, type Curriculum, type PhaseAccuracy } from "./curriculum";
 import {
   inferRepertoire,
   isInRepertoire,
@@ -60,6 +61,9 @@ export interface DashboardData {
     mistakesPerGame: number | null;
     inaccuraciesPerGame: number | null;
   };
+  /** Per-phase accuracy for the player's own moves. */
+  phaseAccuracy: Record<"opening" | "middlegame" | "endgame", PhaseAccuracy | null>;
+  curriculum: Curriculum;
   repertoire: {
     white: Repertoire["white"];
     black: Repertoire["black"];
@@ -291,6 +295,34 @@ export function buildDashboard(playerId: number): DashboardData | null {
       (a, b) => (averageLossByGame.get(b.id) ?? 0) - (averageLossByGame.get(a.id) ?? 0),
     );
 
+  /*
+   * Phase accuracy. Only the player's own moves count — the opponent's moves
+   * are in the evaluation stream but never in the player's statistics.
+   */
+  const totalBlunders = moves.filter((m) => m.classification === "blunder").length;
+  const phaseAccuracy = Object.fromEntries(
+    (["opening", "middlegame", "endgame"] as const).map((phase) => {
+      const inPhase = moves.filter((m) => m.phase === phase);
+      if (inPhase.length === 0) return [phase, null];
+      const blunders = inPhase.filter((m) => m.classification === "blunder").length;
+      return [
+        phase,
+        {
+          plies: inPhase.length,
+          averageLossCp: Math.round(
+            inPhase.reduce((sum, m) => sum + (m.centipawnLoss ?? 0), 0) / inPhase.length,
+          ),
+          blunders,
+          mistakes: inPhase.filter((m) => m.classification === "mistake").length,
+          blunderShare: totalBlunders > 0 ? blunders / totalBlunders : 0,
+          blundersPerGame: analyzed.length
+            ? Math.round((blunders / analyzed.length) * 100) / 100
+            : 0,
+        } satisfies PhaseAccuracy,
+      ];
+    }),
+  ) as Record<"opening" | "middlegame" | "endgame", PhaseAccuracy | null>;
+
   const allPatterns = aggregatePatterns(patternInput);
 
   const repertoireGap = repertoireGapPattern(repertoireSplit, {
@@ -355,6 +387,13 @@ export function buildDashboard(playerId: number): DashboardData | null {
       mistakesPerGame: perGame(countBy("mistake")),
       inaccuraciesPerGame: perGame(countBy("inaccuracy")),
     },
+    phaseAccuracy,
+    curriculum: buildCurriculum({
+      analyzedGames: analyzed.length,
+      patterns: allPatterns,
+      phaseAccuracy,
+      repertoireSplit,
+    }),
     repertoire,
     repertoireSplit,
     weaknesses: topWeaknesses(allPatterns),

@@ -22,6 +22,12 @@ import {
 import { apiGet, apiSend, readActivePlayer, writeActivePlayer } from "@/lib/client-api";
 import type { DashboardResponse, PlayerSummary, RecordSummary } from "@/types/api";
 
+const PHASES = [
+  { key: "opening", label: "오프닝" },
+  { key: "middlegame", label: "미들게임" },
+  { key: "endgame", label: "엔드게임" },
+] as const;
+
 function recordText(record: RecordSummary) {
   if (record.games === 0) return "기록 없음";
   return `${record.wins}승 ${record.losses}패 ${record.draws}무 · ${(record.score * 100).toFixed(0)}%`;
@@ -231,6 +237,67 @@ export default function DashboardPage() {
           )}
         </Card>
       </div>
+
+      <Card
+        title="구간별 성적"
+        hint="형이 둔 수만 집계합니다. 상대 수는 평가 흐름에만 쓰고 통계에는 넣지 않습니다."
+        action={
+          <Link href="/training" className="text-xs text-accent hover:underline">
+            훈련 가이드
+          </Link>
+        }
+      >
+        {PHASES.every((p) => !data.phaseAccuracy[p.key]) ? (
+          <Empty>분석된 게임이 없습니다.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-ink-faint">
+                  <th className="pb-1.5 font-medium">구간</th>
+                  <th className="pb-1.5 text-right font-medium">형이 둔 수</th>
+                  <th className="pb-1.5 text-right font-medium">평균 손실</th>
+                  <th className="pb-1.5 text-right font-medium">중대 실수</th>
+                  <th className="pb-1.5 text-right font-medium">비중</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {PHASES.map((phase) => {
+                  const row = data.phaseAccuracy[phase.key];
+                  if (!row) return null;
+                  // The phase carrying most of the damage is worth spotting at a glance.
+                  const worst =
+                    row.blunderShare ===
+                    Math.max(
+                      ...PHASES.map((p) => data.phaseAccuracy[p.key]?.blunderShare ?? 0),
+                    );
+                  return (
+                    <tr key={phase.key} className={worst ? "font-semibold" : undefined}>
+                      <td className="py-1.5 pr-2">{phase.label}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {row.plies.toLocaleString("ko-KR")}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{row.averageLossCp}cp</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {row.blunders.toLocaleString("ko-KR")}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums text-ink-faint">
+                        {(row.blunderShare * 100).toFixed(0)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {data.curriculum.priority && (
+          <p className="mt-3 rounded-lg bg-gold-soft/50 px-3.5 py-2.5 text-sm text-ink-soft">
+            <strong className="font-semibold">이번 주 초점: {data.curriculum.priority.label}</strong>{" "}
+            — {data.curriculum.priority.reason}
+          </p>
+        )}
+      </Card>
 
       <Card
         title="오프닝 준비 범위"

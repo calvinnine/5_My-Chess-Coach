@@ -232,6 +232,60 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      <Card
+        title="오프닝 준비 범위"
+        hint="자주 두는 오프닝에서 자동으로 추정합니다. 직접 입력하지 않습니다."
+      >
+        {data.repertoire.white.undetermined && data.repertoire.black.undetermined ? (
+          <Empty>준비 범위를 추정하려면 한 색으로 30판 이상이 필요합니다.</Empty>
+        ) : (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["white", "black"] as const).map((color) => {
+                const side = data.repertoire[color];
+                return (
+                  <div key={color} className="rounded-lg bg-surface-sunken px-3.5 py-3">
+                    <div className="text-[11px] text-ink-faint">
+                      {color === "white" ? "백" : "흑"} · {side.sampleSize}판
+                    </div>
+                    {side.undetermined || side.prepared.length === 0 ? (
+                      <p className="mt-1 text-sm text-ink-faint">추정할 표본이 부족합니다.</p>
+                    ) : (
+                      <ul className="mt-1 space-y-0.5 text-sm">
+                        {side.prepared.map((f) => (
+                          <li key={f.family} className="flex justify-between gap-2">
+                            <span className="truncate">{f.family}</span>
+                            <span className="shrink-0 tabular-nums text-ink-faint">
+                              {f.games}판 · {(f.share * 100).toFixed(0)}%
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {data.repertoireSplit.inside.games > 0 &&
+              data.repertoireSplit.outside.games > 0 && (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Stat
+                    label="주력 오프닝 안"
+                    value={`${(data.repertoireSplit.inside.score * 100).toFixed(0)}%`}
+                    sub={`${data.repertoireSplit.inside.games}판 · 평균 손실 ${data.repertoireSplit.inside.averageLossCp}cp`}
+                  />
+                  <Stat
+                    label="그 밖"
+                    value={`${(data.repertoireSplit.outside.score * 100).toFixed(0)}%`}
+                    sub={`${data.repertoireSplit.outside.games}판 · 평균 손실 ${data.repertoireSplit.outside.averageLossCp}cp`}
+                  />
+                </div>
+              )}
+          </>
+        )}
+      </Card>
+
       <Card title="이번 주 훈련 과제" hint="가장 심각하면서 고치기 쉬운 습관부터 최대 3개.">
         <ol className="space-y-2.5">
           {data.trainingTasks.map((task, index) => (

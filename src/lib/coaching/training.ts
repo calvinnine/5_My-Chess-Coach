@@ -45,6 +45,7 @@ const FIXABILITY: Record<string, number> = {
   repeated_piece_move: 0.5,
   development_delay: 0.5,
   passive_when_worse: 0.4,
+  out_of_repertoire: 0.6,
   endgame_technique: 0.4,
 };
 

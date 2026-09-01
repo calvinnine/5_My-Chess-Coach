@@ -141,6 +141,16 @@ export const WEAKNESS_TAGS: TagDefinition[] = [
     weight: 0.5,
   },
   {
+    tag: "out_of_repertoire",
+    label: "준비 범위 이탈 후 계획 부재",
+    category: "phase",
+    description:
+      "자주 두지 않는 오프닝에 들어갔을 때 성적과 정확도가 뚜렷하게 나빠집니다.",
+    coaching:
+      "주력 오프닝 밖으로 나갔다고 느끼면, 외운 수를 찾지 말고 전개·킹 안전·중앙 세 가지만 기준으로 두기",
+    weight: 1,
+  },
+  {
     tag: "endgame_technique",
     label: "엔드게임 기술 부족",
     category: "phase",

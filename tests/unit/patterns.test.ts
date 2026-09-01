@@ -71,14 +71,36 @@ describe("sample-size guardrails", () => {
     expect(aggregatePatterns(mixed)[0].status).toBe("confirmed");
   });
 
-  it("marks an opening-specific problem when it repeats in one family", () => {
+  it("marks an opening-specific problem when it happens disproportionately there", () => {
+    // Every Sicilian game is affected; no French game is.
     const games = [
       ...Array.from({ length: 4 }, (_, i) =>
         game(i + 1, ["development_delay"], { opening: "Sicilian Defense" }),
       ),
-      ...Array.from({ length: 8 }, (_, i) => game(i + 20, [])),
+      ...Array.from({ length: 8 }, (_, i) => game(i + 20, [], { opening: "French Defense" })),
     ];
     expect(aggregatePatterns(games)[0].openingSpecific).toBe("Sicilian Defense");
+  });
+
+  it("does not blame the most-played opening just for being most played", () => {
+    /*
+     * Regression: the old rule took the first family with 3+ occurrences, so the
+     * opening with the largest share was flagged every time. On real data that
+     * labelled the player's *best* defence as the source of weaknesses it was
+     * actually below average for.
+     */
+    const games = [
+      // Affected at the same rate in both openings — neither is specific.
+      ...Array.from({ length: 6 }, (_, i) =>
+        game(i + 1, ["development_delay"], { opening: "Caro Kann" }),
+      ),
+      ...Array.from({ length: 12 }, (_, i) => game(i + 20, [], { opening: "Caro Kann" })),
+      ...Array.from({ length: 3 }, (_, i) =>
+        game(i + 40, ["development_delay"], { opening: "French Defense" }),
+      ),
+      ...Array.from({ length: 6 }, (_, i) => game(i + 50, [], { opening: "French Defense" })),
+    ];
+    expect(aggregatePatterns(games)[0].openingSpecific).toBeNull();
   });
 });
 

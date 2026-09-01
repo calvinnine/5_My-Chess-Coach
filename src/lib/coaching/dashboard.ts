@@ -14,11 +14,19 @@ import { openingFamily } from "@/lib/pgn/parse";
 import {
   aggregatePatterns,
   MIN_SAMPLE_GAMES,
+  repertoireGapPattern,
   topStrengths,
   topWeaknesses,
   type AggregatedPattern,
   type PatternGameInput,
 } from "./patterns";
+import {
+  inferRepertoire,
+  isInRepertoire,
+  splitByRepertoire,
+  type Repertoire,
+  type RepertoireSplit,
+} from "./repertoire";
 import { buildTrainingTasks, type TrainingTaskDraft } from "./training";
 
 export interface RecordSummary {
@@ -52,6 +60,11 @@ export interface DashboardData {
     mistakesPerGame: number | null;
     inaccuraciesPerGame: number | null;
   };
+  repertoire: {
+    white: Repertoire["white"];
+    black: Repertoire["black"];
+  };
+  repertoireSplit: RepertoireSplit;
   weaknesses: AggregatedPattern[];
   strengths: AggregatedPattern[];
   allPatterns: AggregatedPattern[];
@@ -234,7 +247,66 @@ export function buildDashboard(playerId: number): DashboardData | null {
     };
   });
 
+  /*
+   * Repertoire is inferred from every stored game, not only the analysed ones:
+   * how often the player reaches an opening is a fact about their play, and it
+   * does not depend on whether the engine has been through the game yet.
+   */
+  const repertoire = inferRepertoire(
+    allGames.map((g) => ({
+      openingFamily: openingFamily(g.openingName),
+      playerColor: g.playerColor as "white" | "black",
+    })),
+  );
+
+  const averageLossByGame = new Map<number, number | null>();
+  for (const [gameId, gameMoves] of movesByGame) {
+    const losses = gameMoves.map((m) => m.centipawnLoss ?? 0);
+    averageLossByGame.set(
+      gameId,
+      losses.length ? Math.round(losses.reduce((a, b) => a + b, 0) / losses.length) : null,
+    );
+  }
+
+  const repertoireSplit = splitByRepertoire(
+    repertoire,
+    analyzed.map((g) => ({
+      openingFamily: openingFamily(g.openingName),
+      playerColor: g.playerColor as "white" | "black",
+      result: g.result as "win" | "loss" | "draw",
+      averageLossCp: averageLossByGame.get(g.id) ?? null,
+    })),
+  );
+
+  // The worst off-repertoire games make the case concrete.
+  const offRepertoire = analyzed
+    .filter(
+      (g) =>
+        isInRepertoire(repertoire, {
+          openingFamily: openingFamily(g.openingName),
+          playerColor: g.playerColor as "white" | "black",
+        }) === false,
+    )
+    .sort(
+      (a, b) => (averageLossByGame.get(b.id) ?? 0) - (averageLossByGame.get(a.id) ?? 0),
+    );
+
   const allPatterns = aggregatePatterns(patternInput);
+
+  const repertoireGap = repertoireGapPattern(repertoireSplit, {
+    sampleSize: analyzed.length,
+    evidenceGameIds: offRepertoire.slice(0, 6).map((g) => g.id),
+    evidence: offRepertoire.slice(0, 6).map((g) => ({
+      gameId: g.id,
+      ply: 1,
+      moveNumber: 1,
+      san: g.openingName ?? "오프닝 미상",
+      detail: `${g.playerColor === "white" ? "백" : "흑"} · ${g.openingName ?? "오프닝 미상"} · 평균 손실 ${averageLossByGame.get(g.id) ?? "?"}cp`,
+    })),
+    periodStart: allGames.at(-1)?.playedAt ?? null,
+    periodEnd: allGames[0]?.playedAt ?? null,
+  });
+  if (repertoireGap) allPatterns.push(repertoireGap);
 
   return {
     playerId,
@@ -283,6 +355,8 @@ export function buildDashboard(playerId: number): DashboardData | null {
       mistakesPerGame: perGame(countBy("mistake")),
       inaccuraciesPerGame: perGame(countBy("inaccuracy")),
     },
+    repertoire,
+    repertoireSplit,
     weaknesses: topWeaknesses(allPatterns),
     strengths: topStrengths(allPatterns),
     allPatterns,

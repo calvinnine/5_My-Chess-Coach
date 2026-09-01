@@ -159,6 +159,13 @@ export interface Pattern {
   openingSpecific: string | null;
 }
 
+export interface ColourRepertoire {
+  color: "white" | "black";
+  sampleSize: number;
+  prepared: Array<{ family: string; games: number; share: number }>;
+  undetermined: boolean;
+}
+
 export interface DashboardResponse {
   playerId: number;
   username: string;
@@ -180,6 +187,16 @@ export interface DashboardResponse {
     blundersPerGame: number | null;
     mistakesPerGame: number | null;
     inaccuraciesPerGame: number | null;
+  };
+  repertoire: {
+    white: ColourRepertoire;
+    black: ColourRepertoire;
+  };
+  repertoireSplit: {
+    inside: { games: number; score: number; averageLossCp: number | null };
+    outside: { games: number; score: number; averageLossCp: number | null };
+    lossGapCp: number | null;
+    scoreGap: number | null;
   };
   weaknesses: Pattern[];
   strengths: Pattern[];

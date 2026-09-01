@@ -207,6 +207,33 @@ export const trainingTasks = sqliteTable(
   (t) => [index("training_tasks_player_idx").on(t.playerId, t.status)],
 );
 
+/**
+ * One row per attempt at a puzzle built from the player's own mistake.
+ * Kept as a log rather than a status so repeat practice stays visible.
+ */
+export const puzzleAttempts = sqliteTable(
+  "puzzle_attempts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** The move_analyses row the puzzle came from. */
+    moveAnalysisId: integer("move_analysis_id")
+      .notNull()
+      .references(() => moveAnalyses.id, { onDelete: "cascade" }),
+    /** Weakness tag the puzzle was practised under, when filtered. */
+    tag: text("tag"),
+    attemptUci: text("attempt_uci").notNull(),
+    correct: integer("correct", { mode: "boolean" }).notNull(),
+    attemptedAt: integer("attempted_at").notNull().default(now),
+  },
+  (t) => [
+    index("puzzle_attempts_player_idx").on(t.playerId, t.attemptedAt),
+    index("puzzle_attempts_move_idx").on(t.moveAnalysisId),
+  ],
+);
+
 /** ETag / Last-Modified cache for conditional Chess.com requests. */
 export const syncCache = sqliteTable(
   "sync_cache",

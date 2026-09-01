@@ -159,6 +159,44 @@ export interface Pattern {
   openingSpecific: string | null;
 }
 
+export interface Puzzle {
+  id: number;
+  gameId: number;
+  ply: number;
+  fen: string;
+  orientation: "white" | "black";
+  moveNumber: number;
+  /** Present only in server-side responses to a graded attempt. */
+  solutionUci?: string;
+  solutionSan?: string;
+  playedSan?: string;
+  centipawnLoss: number;
+  marginCp: number;
+  themes: string[];
+  bestLine: string | null;
+  playedAt: number;
+  opponentUsername: string;
+  prompt: string;
+}
+
+export interface PuzzleProgress {
+  attempts: number;
+  solved: number;
+  distinctSolved: number;
+}
+
+export interface PuzzleAttemptResult {
+  correct: boolean;
+  solutionUci: string;
+  solutionSan: string;
+  playedSan: string;
+  bestLine: string | null;
+  centipawnLoss: number;
+  gameId: number;
+  ply: number;
+  progress: PuzzleProgress;
+}
+
 export type Perspective = "opening" | "tactics" | "strategy" | "endgame" | "habit";
 
 export interface PhaseAccuracy {

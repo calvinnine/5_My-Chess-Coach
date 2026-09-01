@@ -22,6 +22,13 @@
       "when": 1788213860437,
       "tag": "0002_demonic_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788273244210,
+      "tag": "0003_slimy_blindfold",
+      "breakpoints": true
     }
   ]
 }

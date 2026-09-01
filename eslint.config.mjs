@@ -30,6 +30,7 @@ const config = [
       "src/app/settings/page.tsx",
       "src/app/training/page.tsx",
       "src/components/AnalysisBar.tsx",
+      "src/components/PuzzleTrainer.tsx",
       "src/components/Onboarding.tsx",
     ],
     rules: { "react-hooks/set-state-in-effect": "off" },

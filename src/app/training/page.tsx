@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import PatternCard from "@/components/PatternCard";
+import PuzzleTrainer from "@/components/PuzzleTrainer";
 import {
   Badge,
+  Button,
   Card,
   Empty,
   ErrorNote,
@@ -23,10 +25,16 @@ const PHASE_LABEL: Record<string, string> = {
 function PerspectiveSection({
   report,
   isPriority,
+  playerId,
+  puzzleCounts,
 }: {
   report: PerspectiveReport;
   isPriority: boolean;
+  playerId: number;
+  puzzleCounts: Record<string, number>;
 }) {
+  const [practising, setPractising] = useState<{ tag: string; label: string } | null>(null);
+
   return (
     <Card
       title={report.label}
@@ -76,15 +84,49 @@ function PerspectiveSection({
         </ol>
       </div>
 
+      {practising && (
+        <div className="mt-4">
+          <PuzzleTrainer
+            playerId={playerId}
+            tag={practising.tag}
+            label={practising.label}
+            onClose={() => setPractising(null)}
+          />
+        </div>
+      )}
+
       {report.weaknesses.length > 0 && (
         <div className="mt-4">
           <h3 className="mb-1.5 text-[11px] text-ink-faint">
             근거가 되는 약점 {report.weaknesses.length}개
           </h3>
           <div className="space-y-2.5">
-            {report.weaknesses.map((p) => (
-              <PatternCard key={p.tag} pattern={p} />
-            ))}
+            {report.weaknesses.map((p) => {
+              const count = puzzleCounts[p.tag] ?? 0;
+              return (
+                <div key={p.tag}>
+                  <PatternCard pattern={p} />
+                  {count > 0 && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          setPractising(
+                            practising?.tag === p.tag ? null : { tag: p.tag, label: p.label },
+                          )
+                        }
+                      >
+                        {practising?.tag === p.tag ? "문제 닫기" : "내 실전 문제 풀기"}
+                      </Button>
+                      <span className="text-[11px] text-ink-faint">
+                        내가 틀린 포지션 {count}개
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -105,6 +147,8 @@ function PerspectiveSection({
 
 export default function TrainingPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [playerId, setPlayerId] = useState<number | null>(null);
+  const [puzzleCounts, setPuzzleCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -116,7 +160,15 @@ export default function TrainingPage() {
         setError("등록된 선수가 없습니다. 대시보드에서 먼저 등록해 주세요.");
         return;
       }
-      setData(await apiGet<DashboardResponse>(`/api/dashboard?playerId=${player.id}`));
+      setPlayerId(player.id);
+      const [dashboard, counts] = await Promise.all([
+        apiGet<DashboardResponse>(`/api/dashboard?playerId=${player.id}`),
+        apiGet<{ counts: Record<string, number> }>(
+          `/api/puzzles?playerId=${player.id}&counts=1`,
+        ),
+      ]);
+      setData(dashboard);
+      setPuzzleCounts(counts.counts);
     } catch (err) {
       setError(err instanceof Error ? err.message : "훈련 가이드를 불러오지 못했습니다.");
     }
@@ -127,7 +179,7 @@ export default function TrainingPage() {
   }, [load]);
 
   if (error) return <ErrorNote>{error}</ErrorNote>;
-  if (!data) return <Spinner label="훈련 가이드를 계산하는 중" />;
+  if (!data || playerId === null) return <Spinner label="훈련 가이드를 계산하는 중" />;
 
   const { curriculum } = data;
 
@@ -137,7 +189,8 @@ export default function TrainingPage() {
         <h1 className="text-xl font-semibold tracking-tight">훈련 가이드</h1>
         <p className="mt-0.5 text-sm text-ink-soft">
           분석 {curriculum.analyzedGames}판을 오프닝·전술·전략·엔드게임 관점으로 나눠
-          보여줍니다. 모든 항목에는 근거 게임이 붙습니다.
+          보여줍니다. 약점마다 <strong className="font-medium text-ink">형이 실제로
+          틀린 포지션</strong>을 문제로 풀어볼 수 있습니다.
         </p>
       </header>
 
@@ -169,6 +222,8 @@ export default function TrainingPage() {
             key={report.perspective}
             report={report}
             isPriority={curriculum.priority?.perspective === report.perspective}
+            playerId={playerId}
+            puzzleCounts={puzzleCounts}
           />
         ))
       )}

@@ -56,11 +56,34 @@ export interface AnalyzedMove {
   isPlayerMove: boolean;
 }
 
+/** Raw engine output for one position, exactly as the engine reported it. */
+export interface PositionEval {
+  lines: PvLine[];
+}
+
 export interface AnalyzeGameResult {
   moves: AnalyzedMove[];
   parsed: ParsedGame;
   engineVersion: string;
   settings: AnalysisSettings;
+  /**
+   * One entry per position, index-aligned with `positionsOf(parsed)`. This is
+   * the only part of the analysis that an engine produces; everything else in
+   * `moves` is derived from it by pure functions. Analysis run in a browser is
+   * uploaded as this array alone, so the grading stays on the server.
+   */
+  evaluations: PositionEval[];
+}
+
+/**
+ * The positions an engine has to look at, in order.
+ *
+ * Index 0 is before move 1; index i is the position after move i. So position
+ * i is at once "after move i" and "before move i+1", which is why each one is
+ * evaluated only once.
+ */
+export function positionsOf(parsed: ParsedGame): string[] {
+  return [parsed.moves[0].fenBefore, ...parsed.moves.map((m) => m.fenAfter)];
 }
 
 export interface AnalyzeProgress {
@@ -136,11 +159,8 @@ export async function analyzeGame(
   options: { signal?: AbortSignal; onProgress?: (p: AnalyzeProgress) => void } = {},
 ): Promise<AnalyzeGameResult> {
   const parsed = parsePgn(pgn);
-  const { moves } = parsed;
-
-  // Positions: index 0 is before move 1; index i is after move i.
-  const fens = [moves[0].fenBefore, ...moves.map((m) => m.fenAfter)];
-  const evaluations: Array<{ lines: PvLine[] } | null> = new Array(fens.length).fill(null);
+  const fens = positionsOf(parsed);
+  const evaluations: Array<PositionEval | null> = new Array(fens.length).fill(null);
 
   const total = fens.length;
   for (let i = 0; i < fens.length; i++) {
@@ -197,13 +217,48 @@ export async function analyzeGame(
     parsed,
     engineVersion: engine.versionName,
     settings,
+    evaluations: evaluations as PositionEval[],
   };
+}
+
+/**
+ * Derives the per-ply records from raw engine output, without an engine.
+ *
+ * This is the whole of the analysis apart from the search itself, and it is
+ * pure. The server uses it to re-derive an analysis that a browser produced:
+ * the client supplies only what it actually measured (the engine's scores),
+ * and every judgement — centipawn loss, move grade, themes — is computed here,
+ * from the PGN the server already holds.
+ *
+ * Throws when the evaluations do not line up with the game, which is the one
+ * thing a client could get wrong without lying about a score.
+ */
+export function rebuildAnalysis(
+  pgn: string,
+  playerColor: Color,
+  evaluations: PositionEval[],
+): { moves: AnalyzedMove[]; parsed: ParsedGame } {
+  const parsed = parsePgn(pgn);
+  const fens = positionsOf(parsed);
+  if (evaluations.length !== fens.length) {
+    throw new AnalysisMismatchError(
+      `평가 개수가 맞지 않습니다: ${fens.length}개가 필요한데 ${evaluations.length}개를 받았습니다.`,
+    );
+  }
+  return { moves: buildMoves(parsed, playerColor, evaluations, fens), parsed };
+}
+
+export class AnalysisMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AnalysisMismatchError";
+  }
 }
 
 function buildMoves(
   parsed: ParsedGame,
   playerColor: Color,
-  evaluations: Array<{ lines: PvLine[] } | null>,
+  evaluations: Array<PositionEval | null>,
   fens: string[],
 ): AnalyzedMove[] {
   const out: AnalyzedMove[] = [];

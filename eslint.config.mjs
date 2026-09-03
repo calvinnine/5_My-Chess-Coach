@@ -12,6 +12,8 @@ const config = [
       "drizzle/**",
       "test-results/**",
       "playwright-report/**",
+      // Third-party Stockfish build, copied in by `npm run engine:copy`.
+      "public/engine/**",
     ],
   },
   {

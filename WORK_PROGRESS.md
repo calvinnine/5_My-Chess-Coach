@@ -92,7 +92,7 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 - [x] **Phase A 완료** — `AnalysisEngine` 인터페이스, `LineEngine` 공통 베이스,
       `WasmEngine` 추가. 판정·코칭 로직 변경 0줄. 테스트 97 → 108개.
       교차 검증: 평가 차 중앙값 < 50cp, 승패 방향 일치 > 90%, 분기점 정확히 일치.
-- [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
+- [x] Phase B — 브라우저 WASM 분석 + 업로드 서버 검증 완료 (2026-09-03)
 - [x] Phase C — libSQL 전환 완료 (2026-09-02). 전역 API 큐·어뷰즈 상한은 아직
 
 ## 현재 진단 (전량 621판 분석 완료)
@@ -200,13 +200,22 @@ turso db tokens create chess-coach   # → TURSO_AUTH_TOKEN
 npm run db:migrate                   # 두 값을 넣고 실행하면 원격에 스키마 생성
 ```
 
-### Phase B — 브라우저 분석
-- [ ] 빌드 시 `stockfish-18-lite-single.{js,wasm}`(7MB)만 `public/engine/`로 복사
-- [ ] `createBrowserEngine()` 연결 (Phase A에서 이미 구현됨)
-- [ ] 진행률을 서버 폴링 → 워커 메시지로
-- [ ] **결과 업로드 API + 서버측 검증** ← 유일한 신규 로직.
-      클라이언트가 보낸 분석을 그대로 믿으면 안 됨. 저장된 PGN을 chess.js로 재생해 수
-      일치를 확인하고 `classifyMove`(순수 함수)를 서버에서 다시 돌려 등급 대조.
+### Phase B — 브라우저 분석 ✅ (2026-09-03 완료)
+- [x] `prebuild`/`predev`가 `stockfish-18-lite-single.{js,wasm}`(7MB)만
+      `public/engine/`로 복사. git에는 넣지 않음 (`.gitignore`).
+- [x] `createBrowserEngine()` 연결 — `src/lib/analysis/browser.ts`. 초기 번들에 들어가지
+      않도록 클릭 시점에 동적 import.
+- [x] 진행률을 워커 콜백으로 (버튼에 `분석 중… 5/8`)
+- [x] **업로드 API + 서버 검증** — 계획을 바꿨다 (D28). 등급을 대조하는 대신
+      **클라이언트는 원시 엔진 점수만 올리고 서버가 판정을 전부 다시 계산**한다.
+      검증 코드와 판정 코드가 같은 함수라 어긋날 수 없다.
+- [x] `CHESS_COACH_DISABLE_LOCAL_ENGINE=1` — 배포 환경에서 자식 프로세스를 막고,
+      로컬에서도 브라우저 경로를 시험할 수 있게 (D29)
+- [x] lint / typecheck / 단위 186 / E2E 9 통과
+
+**실제 브라우저에서 검증함**: 엔진 없음 상태로 서버를 띄우고 브라우저에서 WASM 분석을
+돌려 저장까지 확인. `analysisVersion`에 `Stockfish 18 Lite WASM (browser)`가 기록된다.
+조작 시도 3종(개수 불일치·불법 PV·깊이 1) 모두 422로 거부되고 DB는 그대로였다.
 
 ## 본인 확인 (공개 서비스 필수)
 
@@ -258,7 +267,7 @@ npm run db:migrate                   # 두 값을 넣고 실행하면 원격에 
 
 ## 다음 할 일
 
-- [x] Phase C(libSQL 전환) 완료 → **다음은 Phase B(브라우저 분석)** → 배포
+- [x] Phase B·C 완료 → **다음은 본인 확인 + 세션/소유권 모델** → 배포
 - [ ] Chess.com OAuth 신청서 제출 (배포 주소 확정 후)
 - [ ] 본인 확인 방법 B 구현
 - [ ] 타임아웃 실패 7판 재시도 (`analysis_status='failed'` → `pending`)

@@ -13,3 +13,6 @@ test-results/
 playwright-report/
 .vitest/
 !data/.gitkeep
+
+# Generated at build time from the stockfish package (7MB).
+public/engine/

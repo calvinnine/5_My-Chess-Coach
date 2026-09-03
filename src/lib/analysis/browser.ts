@@ -1,0 +1,76 @@
+"use client";
+
+import { createBrowserEngine } from "@/lib/engine/wasm";
+import {
+  analyzeGame,
+  PRESETS,
+  type AnalyzeProgress,
+  type PositionEval,
+} from "./analyzer";
+import type { Color } from "./eval";
+
+/** Served from `public/engine/`, put there by `npm run engine:copy`. */
+const ENGINE_URL = "/engine/stockfish-18-lite-single.js";
+
+export type BrowserPreset = "fast" | "standard" | "precise";
+
+export interface BrowserAnalysisResult {
+  engineVersion: string;
+  preset: BrowserPreset;
+  evaluations: PositionEval[];
+}
+
+/**
+ * Runs the analysis in this browser, in a worker.
+ *
+ * Only the raw engine output is returned. Everything the app concludes from it
+ * is recomputed on the server from the PGN it already stores, so nothing this
+ * function derives locally is what ends up being saved — see
+ * `api/games/[id]/analysis`.
+ */
+export async function analyzeInBrowser(
+  pgn: string,
+  playerColor: Color,
+  options: {
+    preset?: BrowserPreset;
+    signal?: AbortSignal;
+    onProgress?: (p: AnalyzeProgress) => void;
+  } = {},
+): Promise<BrowserAnalysisResult> {
+  const preset = options.preset ?? "standard";
+  /*
+   * The shipped build is single-threaded: the multi-threaded ones need
+   * cross-origin isolation for SharedArrayBuffer, which would constrain every
+   * page on the site. Hash is kept modest because this shares memory with the
+   * page it is running in.
+   */
+  const engine = createBrowserEngine(ENGINE_URL, {
+    hashMb: 64,
+    multiPv: PRESETS[preset].multiPv,
+    supportsThreads: false,
+  });
+
+  try {
+    await engine.start();
+    const result = await analyzeGame(pgn, playerColor, engine, PRESETS[preset], {
+      signal: options.signal,
+      onProgress: options.onProgress,
+    });
+    return {
+      engineVersion: result.engineVersion,
+      preset,
+      evaluations: result.evaluations,
+    };
+  } finally {
+    await engine.stop();
+  }
+}
+
+/** Whether this browser can run the WASM engine at all. */
+export function browserEngineSupported(): boolean {
+  return (
+    typeof Worker !== "undefined" &&
+    typeof WebAssembly !== "undefined" &&
+    typeof WebAssembly.instantiate === "function"
+  );
+}

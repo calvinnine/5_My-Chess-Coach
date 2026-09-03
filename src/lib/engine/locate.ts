@@ -49,6 +49,15 @@ function probeVersion(binary: string): string | null {
  * is a supported state that the UI explains.
  */
 export function locateEngine(configuredPath?: string | null): EngineLocation {
+  /*
+   * A hosted deployment must never shell out to a local binary, and a local
+   * user may want the browser engine instead. Both are the same switch: with
+   * no server engine the app analyses in the browser and uploads the result.
+   */
+  if (process.env.CHESS_COACH_DISABLE_LOCAL_ENGINE === "1") {
+    return { found: false, path: null, version: null, source: "none" };
+  }
+
   const candidates: Array<{ path: string; source: EngineLocation["source"] }> = [];
   if (configuredPath) candidates.push({ path: configuredPath, source: "setting" });
   if (process.env.STOCKFISH_PATH)

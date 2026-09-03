@@ -53,6 +53,11 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
   const [error, setError] = useState<string | null>(null);
   const [ply, setPly] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
+  /** null until known; false means the analysis has to run in this browser. */
+  const [serverEngine, setServerEngine] = useState<boolean | null>(null);
+  const [localProgress, setLocalProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   const initialPlyApplied = useRef(false);
 
   const load = useCallback(async () => {
@@ -68,6 +73,17 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     void load();
   }, [load]);
+
+  /*
+   * A deployed copy has no Stockfish binary, so the analysis runs in the
+   * browser instead. Asking once on mount keeps the button from having to fail
+   * before it can pick a path.
+   */
+  useEffect(() => {
+    apiGet<{ engine: { found: boolean } }>("/api/health")
+      .then((res) => setServerEngine(res.engine.found))
+      .catch(() => setServerEngine(false));
+  }, []);
 
   // Deep links from evidence lists land on the exact ply.
   useEffect(() => {
@@ -123,20 +139,58 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
     setAnalyzing(true);
     setError(null);
     try {
-      await apiSend(`/api/games/${id}/analyze`, "POST");
-      // Poll until the single-game job finishes.
-      const timer = setInterval(async () => {
-        const status = await apiGet<{ job: { running: boolean } }>("/api/analysis/status");
-        if (!status.job.running) {
-          clearInterval(timer);
-          setAnalyzing(false);
-          void load();
-        }
-      }, 1500);
+      if (serverEngine) await analyzeOnServer();
+      else await analyzeHere();
     } catch (err) {
-      setAnalyzing(false);
       setError(err instanceof Error ? err.message : "분석을 시작하지 못했습니다.");
+      setAnalyzing(false);
+      setLocalProgress(null);
     }
+  }
+
+  async function analyzeOnServer() {
+    await apiSend(`/api/games/${id}/analyze`, "POST");
+    // Poll until the single-game job finishes.
+    const timer = setInterval(async () => {
+      const status = await apiGet<{ job: { running: boolean } }>("/api/analysis/status");
+      if (!status.job.running) {
+        clearInterval(timer);
+        setAnalyzing(false);
+        void load();
+      }
+    }, 1500);
+  }
+
+  /**
+   * Runs the engine in this browser and uploads what it measured.
+   *
+   * Only the raw scores go up. The server re-derives every judgement from the
+   * PGN it already holds, so nothing computed here decides what is stored.
+   */
+  async function analyzeHere() {
+    if (!data) return;
+    // Kept out of the initial bundle: it pulls in the worker plumbing.
+    const { analyzeInBrowser, browserEngineSupported } = await import(
+      "@/lib/analysis/browser"
+    );
+    if (!browserEngineSupported()) {
+      throw new Error("이 브라우저에서는 분석 엔진을 실행할 수 없습니다.");
+    }
+
+    setLocalProgress({ done: 0, total: 0 });
+    const result = await analyzeInBrowser(data.game.pgn, playerColor as "white" | "black", {
+      onProgress: (p) => setLocalProgress({ done: p.done, total: p.total }),
+    });
+
+    await apiSend(`/api/games/${id}/analysis`, "POST", {
+      engineVersion: result.engineVersion,
+      preset: result.preset,
+      evaluations: result.evaluations,
+    });
+
+    setLocalProgress(null);
+    setAnalyzing(false);
+    await load();
   }
 
   if (error && !data) return <ErrorNote>{error}</ErrorNote>;
@@ -193,8 +247,17 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
             Chess.com에서 보기
           </a>
           {game.analysisStatus !== "completed" && game.opponentKind === "human" && (
-            <Button onClick={() => void analyze()} disabled={analyzing || game.rules !== "chess"}>
-              {analyzing ? "분석 중…" : "이 게임 분석"}
+            <Button
+              onClick={() => void analyze()}
+              disabled={analyzing || game.rules !== "chess" || serverEngine === null}
+            >
+              {analyzing
+                ? localProgress && localProgress.total > 0
+                  ? `분석 중… ${localProgress.done}/${localProgress.total}`
+                  : "분석 중…"
+                : serverEngine === false
+                  ? "이 브라우저에서 분석"
+                  : "이 게임 분석"}
             </Button>
           )}
         </div>

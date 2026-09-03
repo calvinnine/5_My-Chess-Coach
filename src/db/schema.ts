@@ -23,9 +23,61 @@ export const players = sqliteTable(
     /** Last archive month fully synced, as "YYYY-MM". */
     lastSyncedMonth: text("last_synced_month"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    /**
+     * When this Chess.com account was proven to belong to whoever registered
+     * it. Null means unproven: in a hosted deployment such a player has no
+     * data of their own yet and cannot be signed in to.
+     */
+    verifiedAt: integer("verified_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("players_username_idx").on(t.username)],
+);
+
+/**
+ * A signed-in browser.
+ *
+ * Only the hash of the token is stored: the raw token lives in the visitor's
+ * cookie and nowhere else, so a copy of this table does not let anyone sign in
+ * as someone else.
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull().default(now),
+    expiresAt: integer("expires_at").notNull(),
+    lastSeenAt: integer("last_seen_at").notNull().default(now),
+  },
+  (t) => [
+    uniqueIndex("sessions_token_idx").on(t.tokenHash),
+    index("sessions_player_idx").on(t.playerId),
+  ],
+);
+
+/**
+ * An outstanding "prove this account is yours" challenge.
+ *
+ * The visitor puts `code` somewhere in their public Chess.com profile and the
+ * server reads it back through the public API. No password is ever involved —
+ * this app must never ask for one.
+ */
+export const verificationChallenges = sqliteTable(
+  "verification_challenges",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Lower-cased Chess.com handle being claimed. */
+    username: text("username").notNull(),
+    code: text("code").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: integer("created_at").notNull().default(now),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (t) => [uniqueIndex("verification_challenges_username_idx").on(t.username)],
 );
 
 export const playerRatings = sqliteTable(

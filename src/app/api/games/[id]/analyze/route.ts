@@ -1,4 +1,5 @@
 import { startAnalysis } from "@/lib/analysis/job";
+import { requireOwnedGame } from "@/lib/auth/ownership";
 import { handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -10,6 +11,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    await requireOwnedGame(Number(id));
     const state = await startAnalysis({ gameIds: [Number(id)] });
     return ok(state, { status: 202 });
   } catch (err) {

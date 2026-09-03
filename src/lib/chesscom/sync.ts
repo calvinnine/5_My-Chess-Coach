@@ -69,7 +69,7 @@ export async function registerPlayer(rawUsername: string): Promise<RegisterResul
     throw err;
   }
   if (!profile) {
-    // 304 on a profile we have never stored should not happen, but be safe.
+    // The profile request is unconditional, so an empty body is a real fault.
     throw new ChessComError("프로필 응답이 비어 있습니다.", "invalid_response");
   }
 

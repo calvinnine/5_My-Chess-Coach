@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SessionBadge from "@/components/SessionBadge";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,12 +35,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
             </nav>
-            <span className="ml-auto text-xs text-ink-faint">로컬 전용 · 단일 사용자</span>
+            <SessionBadge />
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
         <footer className="mx-auto max-w-6xl px-5 pb-10 text-xs text-ink-faint">
-          게임 기록과 분석 결과는 이 Mac의 SQLite 파일에만 저장됩니다.
+          Chess.com 공개 API만 사용하며 비밀번호는 요청하지도, 저장하지도 않습니다.
         </footer>
       </body>
     </html>

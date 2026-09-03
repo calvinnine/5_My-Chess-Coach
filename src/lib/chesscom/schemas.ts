@@ -7,6 +7,8 @@ export const profileSchema = z.object({
   title: z.string().optional(),
   avatar: z.string().optional(),
   country: z.string().optional(),
+  /** Free-text fields the account owner can edit; used for ownership proof. */
+  location: z.string().optional(),
   url: z.string().optional(),
   joined: z.number().optional(),
   last_online: z.number().optional(),

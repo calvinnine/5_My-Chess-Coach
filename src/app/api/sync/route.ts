@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { syncPlayerGames } from "@/lib/chesscom/sync";
+import { NotOwnerError, requirePlayer } from "@/lib/auth/session";
+import { normalizeUsername } from "@/lib/auth/verification";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -16,6 +18,17 @@ export async function POST(request: Request) {
   try {
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return fail("동기화 요청 형식이 올바르지 않습니다.");
+
+    /*
+     * Syncing someone else's handle is the thing this service must not do: it
+     * would pull a stranger's games into an account that never proved it owns
+     * them.
+     */
+    const player = await requirePlayer();
+    if (normalizeUsername(parsed.data.username) !== player.username) {
+      throw new NotOwnerError("본인 계정만 동기화할 수 있습니다.");
+    }
+
     const summary = await syncPlayerGames(parsed.data.username, {
       months: parsed.data.months,
       maxNewGames: parsed.data.maxNewGames,

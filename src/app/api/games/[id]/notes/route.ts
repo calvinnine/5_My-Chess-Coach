@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { gameReviews, games } from "@/db/schema";
+import { gameReviews } from "@/db/schema";
+import { requireOwnedGame } from "@/lib/auth/ownership";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -19,12 +20,8 @@ export async function PUT(
   try {
     const { id } = await params;
     const gameId = Number(id);
-    const [game] = await db
-      .select({ id: games.id })
-      .from(games)
-      .where(eq(games.id, gameId))
-      .limit(1);
-    if (!game) return fail("게임을 찾을 수 없습니다.", 404);
+    // These notes are the most private thing the app stores.
+    await requireOwnedGame(gameId);
 
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return fail("메모 형식이 올바르지 않습니다.");

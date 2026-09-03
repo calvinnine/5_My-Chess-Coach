@@ -214,10 +214,22 @@ export class ChessComClient {
     return { ...result, data: parsed.data };
   }
 
+  /*
+   * Neither of these uses the conditional cache, for the same reason
+   * `getArchives` does not: every caller needs the body, and a 304 carries
+   * none. Both responses are small, so caching them saves nothing worth the
+   * failure it causes.
+   *
+   * Concretely, with caching on: ownership verification would read the profile
+   * as it stood before the visitor added their code and could never pass, and
+   * re-registering a known player would throw on an empty profile or silently
+   * record no ratings.
+   */
   getProfile(username: string) {
     return this.fetchParsed(
       `${CHESSCOM_BASE}/player/${encodeURIComponent(username)}`,
       profileSchema,
+      { useCache: false, storeCache: false },
     );
   }
 
@@ -225,6 +237,7 @@ export class ChessComClient {
     return this.fetchParsed(
       `${CHESSCOM_BASE}/player/${encodeURIComponent(username)}/stats`,
       statsSchema,
+      { useCache: false, storeCache: false },
     );
   }
 

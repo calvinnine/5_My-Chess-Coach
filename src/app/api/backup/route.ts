@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { client, dbLocation } from "@/db/client";
+import { requirePlayer } from "@/lib/auth/session";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -20,6 +21,7 @@ const REMOTE_NOTE =
 
 export async function GET() {
   try {
+    await requirePlayer();
     if (!BACKUP_DIR) return fail(REMOTE_NOTE, 409);
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const files = fs
@@ -38,6 +40,7 @@ export async function GET() {
 
 export async function POST() {
   try {
+    await requirePlayer();
     if (!BACKUP_DIR) return fail(REMOTE_NOTE, 409);
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");

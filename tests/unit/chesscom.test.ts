@@ -288,3 +288,45 @@ describe("helpers", () => {
     expect(resultFor(undefined)).toBe("draw");
   });
 });
+
+describe("profile and stats are never fetched conditionally", () => {
+  /*
+   * Regression: with the conditional cache on, the first call stored an ETag
+   * and every later one came back 304 with no body. That broke re-registering
+   * a known player outright, and made ratings silently stop updating — the
+   * same failure shape as the archive list in D7.
+   */
+  function recordingClient() {
+    const requests: Array<Record<string, string>> = [];
+    const store = new Map<string, { etag?: string | null }>();
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push((init?.headers ?? {}) as Record<string, string>);
+      const stats = String(input).endsWith("/stats");
+      return new Response(
+        JSON.stringify(stats ? { chess_rapid: { last: { rating: 811 } } } : { username: "x" }),
+        { status: 200, headers: { "Content-Type": "application/json", etag: '"v1"' } },
+      );
+    }) as unknown as typeof fetch;
+    const client = new ChessComClient({
+      fetchImpl,
+      cache: { get: (url) => store.get(url), set: (url, v) => void store.set(url, v) },
+    });
+    return { client, requests, store };
+  }
+
+  it("asks for the profile body every time", async () => {
+    const { client, requests, store } = recordingClient();
+    expect((await client.getProfile("x")).data).not.toBeNull();
+    expect((await client.getProfile("x")).data).not.toBeNull();
+    expect(requests.every((h) => h["If-None-Match"] === undefined)).toBe(true);
+    expect(store.size).toBe(0);
+  });
+
+  it("asks for the stats body every time", async () => {
+    const { client, requests, store } = recordingClient();
+    expect((await client.getStats("x")).data).not.toBeNull();
+    expect((await client.getStats("x")).data).not.toBeNull();
+    expect(requests.every((h) => h["If-None-Match"] === undefined)).toBe(true);
+    expect(store.size).toBe(0);
+  });
+});

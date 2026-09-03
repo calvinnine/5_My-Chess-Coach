@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, lte, ne, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gameReviews, games } from "@/db/schema";
+import { requireOwnPlayer } from "@/lib/auth/session";
 import { handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -12,8 +13,13 @@ export async function GET(request: Request) {
     const q = url.searchParams;
     const filters: SQL[] = [];
 
-    const playerId = q.get("playerId");
-    if (playerId) filters.push(eq(games.playerId, Number(playerId)));
+    /*
+     * Not optional and not caller-supplied: the list is always the caller's own
+     * games, whatever playerId the query string asks for.
+     */
+    const requested = q.get("playerId");
+    const playerId = await requireOwnPlayer(requested ? Number(requested) : null);
+    filters.push(eq(games.playerId, playerId));
 
     const result = q.get("result");
     if (result && result !== "all") filters.push(eq(games.result, result));

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AnalysisBar from "@/components/AnalysisBar";
 import Onboarding from "@/components/Onboarding";
+import SignIn from "@/components/SignIn";
 import PatternCard from "@/components/PatternCard";
 import RatingTrend from "@/components/RatingTrend";
 import {
@@ -33,7 +34,13 @@ function recordText(record: RecordSummary) {
   return `${record.wins}승 ${record.losses}패 ${record.draws}무 · ${(record.score * 100).toFixed(0)}%`;
 }
 
+interface SessionInfo {
+  authRequired: boolean;
+  player: { playerId: number; username: string; displayName: string } | null;
+}
+
 export default function DashboardPage() {
+  const [session, setSession] = useState<SessionInfo | null>(null);
   const [playerId, setPlayerId] = useState<number | null>(null);
   const [players, setPlayers] = useState<PlayerSummary[] | null>(null);
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -41,7 +48,18 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
 
+  /*
+   * Nothing is fetched before the session is known: on a deployment every data
+   * request would 401, and the screen would show errors instead of a sign-in.
+   */
   useEffect(() => {
+    apiGet<SessionInfo>("/api/auth/session")
+      .then(setSession)
+      .catch(() => setSession({ authRequired: true, player: null }));
+  }, []);
+
+  useEffect(() => {
+    if (!session || (session.authRequired && !session.player)) return;
     apiGet<{ players: PlayerSummary[] }>("/api/players")
       .then((r) => {
         setPlayers(r.players);
@@ -54,7 +72,7 @@ export default function DashboardPage() {
         }
       })
       .catch((err) => setError(err.message));
-  }, []);
+  }, [session]);
 
   const load = useCallback(async (id: number) => {
     try {
@@ -91,6 +109,22 @@ export default function DashboardPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  if (session === null) return <Spinner label="불러오는 중" />;
+
+  /*
+   * Where identities matter, proving the account comes before anything else:
+   * an unproven visitor has no games and no notes to show.
+   */
+  if (session.authRequired && !session.player) {
+    return (
+      <SignIn
+        onSignedIn={() =>
+          apiGet<SessionInfo>("/api/auth/session").then(setSession).catch(() => {})
+        }
+      />
+    );
   }
 
   if (players === null) return <Spinner label="불러오는 중" />;

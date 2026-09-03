@@ -1,8 +1,9 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { gameReviews, games, moveAnalyses } from "@/db/schema";
+import { gameReviews, moveAnalyses } from "@/db/schema";
 import { formatEval, toWhitePerspective, type Color } from "@/lib/analysis/eval";
-import { fail, handleError, ok } from "@/lib/api";
+import { requireOwnedGame } from "@/lib/auth/ownership";
+import { handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,8 +15,7 @@ export async function GET(
   try {
     const { id } = await params;
     const gameId = Number(id);
-    const [game] = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
-    if (!game) return fail("게임을 찾을 수 없습니다.", 404);
+    const { game } = await requireOwnedGame(gameId);
 
     const [moves, [review]] = await Promise.all([
       db

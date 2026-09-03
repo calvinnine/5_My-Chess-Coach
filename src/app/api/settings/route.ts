@@ -2,6 +2,7 @@ import { z } from "zod";
 import { locateEngine } from "@/lib/engine/locate";
 import { getAllSettings, getSetting, setSetting, SETTING_KEYS } from "@/lib/settings";
 import { PRESETS } from "@/lib/analysis/analyzer";
+import { authRequired, requirePlayer } from "@/lib/auth/session";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requirePlayer();
     return ok({
       settings: await getAllSettings(),
       presets: PRESETS,
@@ -29,6 +31,14 @@ const bodySchema = z.object({
 
 export async function PUT(request: Request) {
   try {
+    await requirePlayer();
+    if (authRequired()) {
+      /*
+       * These settings describe the server, not a person: the engine path and
+       * search depth are shared by everyone using this deployment.
+       */
+      return fail("이 배포에서는 설정을 변경할 수 없습니다.", 403);
+    }
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return fail("설정 형식이 올바르지 않습니다.");
     const d = parsed.data;

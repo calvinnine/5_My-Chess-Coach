@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getPuzzles, progressFor, puzzleCountsByTag, recordAttempt } from "@/lib/coaching/puzzle-repo";
 import { gradeAttempt } from "@/lib/coaching/puzzles";
+import { requireOwnPlayer } from "@/lib/auth/session";
 import { fail, handleError, ok, optionalPositiveInt } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -9,8 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
-    const playerId = optionalPositiveInt(params, "playerId");
-    if (playerId === null) return fail("playerId가 필요합니다.");
+    const playerId = await requireOwnPlayer(optionalPositiveInt(params, "playerId"));
 
     if (params.get("counts") === "1") {
       return ok({ counts: await puzzleCountsByTag(playerId) });
@@ -51,7 +51,8 @@ export async function POST(request: Request) {
   try {
     const parsed = attemptSchema.safeParse(await request.json());
     if (!parsed.success) return fail("풀이 요청 형식이 올바르지 않습니다.");
-    const { playerId, puzzleId, tag, attemptUci } = parsed.data;
+    const { puzzleId, tag, attemptUci } = parsed.data;
+    const playerId = await requireOwnPlayer(parsed.data.playerId);
 
     // Re-derive the puzzle server-side: the client must not tell us the answer.
     const puzzle = (await getPuzzles(playerId, { limit: Number.MAX_SAFE_INTEGER })).find(

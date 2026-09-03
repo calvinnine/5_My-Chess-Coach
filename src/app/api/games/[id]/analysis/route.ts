@@ -1,7 +1,4 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { games } from "@/db/schema";
 import {
   AnalysisMismatchError,
   PRESETS,
@@ -11,6 +8,7 @@ import {
 import { persistAnalysis } from "@/lib/analysis/persist";
 import { prepareUploadedEvaluations } from "@/lib/analysis/verify";
 import type { Color } from "@/lib/analysis/eval";
+import { requireOwnedGame } from "@/lib/auth/ownership";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -52,8 +50,7 @@ export async function POST(
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return fail("분석 결과 형식이 올바르지 않습니다.");
 
-    const [game] = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
-    if (!game) return fail("게임을 찾을 수 없습니다.", 404);
+    const { game } = await requireOwnedGame(gameId);
     if (game.rules !== "chess") return fail("표준 체스가 아닌 게임은 분석하지 않습니다.");
     if (game.opponentKind !== "human") {
       return fail("코치·봇 연습 게임은 분석 대상이 아닙니다.");

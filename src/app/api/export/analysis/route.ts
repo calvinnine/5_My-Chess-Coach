@@ -1,6 +1,7 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { gameReviews, games, moveAnalyses, patterns } from "@/db/schema";
+import { requireOwnPlayer } from "@/lib/auth/session";
 import { handleError, optionalPositiveInt } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -8,11 +9,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const playerId = optionalPositiveInt(new URL(request.url).searchParams, "playerId");
+    // Always scoped to the caller: an export must never span accounts.
+    const playerId = await requireOwnPlayer(
+      optionalPositiveInt(new URL(request.url).searchParams, "playerId"),
+    );
     const rows = await db
       .select()
       .from(games)
-      .where(playerId === null ? undefined : eq(games.playerId, playerId))
+      .where(eq(games.playerId, playerId))
       .orderBy(desc(games.playedAt));
     const ids = rows.map((r) => r.id);
     const reviews = ids.length
@@ -31,10 +35,7 @@ export async function GET(request: Request) {
       games: rows,
       reviews,
       moveAnalyses: moves,
-      patterns:
-        playerId === null
-          ? await db.select().from(patterns)
-          : await db.select().from(patterns).where(eq(patterns.playerId, playerId)),
+      patterns: await db.select().from(patterns).where(eq(patterns.playerId, playerId)),
     };
 
     return new Response(JSON.stringify(payload, null, 2), {

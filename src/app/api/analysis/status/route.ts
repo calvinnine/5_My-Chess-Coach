@@ -9,20 +9,21 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const counts = db
-      .select({ status: games.analysisStatus, count: sql<number>`count(*)` })
-      .from(games)
-      .groupBy(games.analysisStatus)
-      .all();
-    return ok({
-      job: getJobState(),
-      queue: Object.fromEntries(counts.map((c) => [c.status, c.count])),
-      failedGames: db
+    const [counts, failedGames] = await Promise.all([
+      db
+        .select({ status: games.analysisStatus, count: sql<number>`count(*)` })
+        .from(games)
+        .groupBy(games.analysisStatus),
+      db
         .select({ id: games.id, error: games.analysisError })
         .from(games)
         .where(eq(games.analysisStatus, "failed"))
-        .limit(20)
-        .all(),
+        .limit(20),
+    ]);
+    return ok({
+      job: getJobState(),
+      queue: Object.fromEntries(counts.map((c) => [c.status, c.count])),
+      failedGames,
     });
   } catch (err) {
     return handleError(err);

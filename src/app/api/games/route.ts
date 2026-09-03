@@ -40,21 +40,19 @@ export async function GET(request: Request) {
 
     const limit = Math.min(Number(q.get("limit") ?? 100), 500);
 
-    const rows = db
+    const rows = await db
       .select()
       .from(games)
       .where(filters.length ? and(...filters) : undefined)
       .orderBy(desc(games.playedAt))
-      .limit(limit)
-      .all();
+      .limit(limit);
 
     const reviewIds = rows.map((r) => r.id);
     const reviews = reviewIds.length
-      ? db
+      ? await db
           .select({ gameId: gameReviews.gameId, overallSummary: gameReviews.overallSummary })
           .from(gameReviews)
           .where(inArray(gameReviews.gameId, reviewIds))
-          .all()
       : [];
     const summaryById = new Map(reviews.map((r) => [r.gameId, r.overallSummary]));
 

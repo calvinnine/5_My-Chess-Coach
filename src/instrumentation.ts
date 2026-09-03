@@ -3,5 +3,5 @@ export async function register() {
   // real work lives one module deeper so the Edge build never traces node:*.
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { runStartupTasks } = await import("@/lib/startup");
-  runStartupTasks();
+  await runStartupTasks();
 }

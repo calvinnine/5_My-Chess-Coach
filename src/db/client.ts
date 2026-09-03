@@ -1,30 +1,43 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import { resolveLocation } from "./location";
 import * as schema from "./schema";
 
-export const DB_PATH = path.resolve(
-  process.env.CHESS_COACH_DB ?? "./data/chess-coach.db",
-);
+export { resolveLocation, type DbLocation } from "./location";
 
-function open() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const sqlite = new Database(DB_PATH);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  sqlite.pragma("busy_timeout = 5000");
-  return sqlite;
+export const dbLocation = resolveLocation();
+
+function open(): Client {
+  if (dbLocation.remote) {
+    const authToken = process.env.TURSO_AUTH_TOKEN?.trim();
+    if (!authToken) {
+      throw new Error(
+        "TURSO_DATABASE_URL은 설정됐지만 TURSO_AUTH_TOKEN이 없습니다. 둘 다 필요합니다.",
+      );
+    }
+    return createClient({ url: dbLocation.label, authToken });
+  }
+
+  const filePath = dbLocation.filePath!;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  /*
+   * WAL is not set here: journal mode is stored in the file itself, so the
+   * migrator sets it once and every later connection inherits it. Setting it
+   * from here would mean firing an unawaited statement before the first query.
+   *
+   * Foreign keys are enforced by default, unlike better-sqlite3.
+   */
+  return createClient({ url: `file:${filePath}` });
 }
 
 // Next.js dev server re-evaluates modules on every hot reload; keep one handle.
-const globalForDb = globalThis as unknown as {
-  __chessCoachSqlite?: Database.Database;
-};
+const globalForDb = globalThis as unknown as { __chessCoachClient?: Client };
 
-export const sqlite = globalForDb.__chessCoachSqlite ?? open();
-if (process.env.NODE_ENV !== "production") globalForDb.__chessCoachSqlite = sqlite;
+export const client = globalForDb.__chessCoachClient ?? open();
+if (process.env.NODE_ENV !== "production") globalForDb.__chessCoachClient = client;
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });
 export { schema };

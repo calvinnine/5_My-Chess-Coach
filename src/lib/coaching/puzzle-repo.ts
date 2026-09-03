@@ -11,8 +11,8 @@ import { selectPuzzles, type PuzzleCandidate, type SelectOptions } from "./puzzl
  * filtering (clear best move, still something at stake) lives in `puzzles.ts`
  * so it stays testable without a database.
  */
-function loadCandidates(playerId: number): PuzzleCandidate[] {
-  const rows = db
+async function loadCandidates(playerId: number): Promise<PuzzleCandidate[]> {
+  const rows = await db
     .select({
       moveAnalysisId: moveAnalyses.id,
       gameId: moveAnalyses.gameId,
@@ -41,8 +41,7 @@ function loadCandidates(playerId: number): PuzzleCandidate[] {
         eq(moveAnalyses.isPlayerMove, true),
         inArray(moveAnalyses.classification, ["mistake", "blunder"]),
       ),
-    )
-    .all();
+    );
 
   return rows.map((row) => {
     let themes: string[] = [];
@@ -60,25 +59,27 @@ function loadCandidates(playerId: number): PuzzleCandidate[] {
   });
 }
 
-export function solvedIdsFor(playerId: number): Set<number> {
-  const rows = db
+export async function solvedIdsFor(playerId: number): Promise<Set<number>> {
+  const rows = await db
     .select({ moveAnalysisId: puzzleAttempts.moveAnalysisId })
     .from(puzzleAttempts)
-    .where(and(eq(puzzleAttempts.playerId, playerId), eq(puzzleAttempts.correct, true)))
-    .all();
+    .where(and(eq(puzzleAttempts.playerId, playerId), eq(puzzleAttempts.correct, true)));
   return new Set(rows.map((r) => r.moveAnalysisId));
 }
 
-export function getPuzzles(playerId: number, options: SelectOptions = {}) {
-  return selectPuzzles(loadCandidates(playerId), {
-    ...options,
-    solvedIds: options.solvedIds ?? solvedIdsFor(playerId),
-  });
+export async function getPuzzles(playerId: number, options: SelectOptions = {}) {
+  const [candidates, solvedIds] = await Promise.all([
+    loadCandidates(playerId),
+    options.solvedIds ? Promise.resolve(options.solvedIds) : solvedIdsFor(playerId),
+  ]);
+  return selectPuzzles(candidates, { ...options, solvedIds });
 }
 
 /** Counts available puzzles per weakness tag, for the training page. */
-export function puzzleCountsByTag(playerId: number): Record<string, number> {
-  const puzzles = selectPuzzles(loadCandidates(playerId), { limit: Number.MAX_SAFE_INTEGER });
+export async function puzzleCountsByTag(playerId: number): Promise<Record<string, number>> {
+  const puzzles = selectPuzzles(await loadCandidates(playerId), {
+    limit: Number.MAX_SAFE_INTEGER,
+  });
   const counts: Record<string, number> = {};
   for (const puzzle of puzzles) {
     for (const tag of puzzle.themes) counts[tag] = (counts[tag] ?? 0) + 1;
@@ -86,14 +87,14 @@ export function puzzleCountsByTag(playerId: number): Record<string, number> {
   return counts;
 }
 
-export function recordAttempt(input: {
+export async function recordAttempt(input: {
   playerId: number;
   moveAnalysisId: number;
   tag: string | null;
   attemptUci: string;
   correct: boolean;
 }) {
-  db.insert(puzzleAttempts).values(input).run();
+  await db.insert(puzzleAttempts).values(input);
 }
 
 export interface PuzzleProgress {
@@ -102,8 +103,8 @@ export interface PuzzleProgress {
   distinctSolved: number;
 }
 
-export function progressFor(playerId: number, tag?: string): PuzzleProgress {
-  const rows = db
+export async function progressFor(playerId: number, tag?: string): Promise<PuzzleProgress> {
+  const rows = await db
     .select()
     .from(puzzleAttempts)
     .where(
@@ -111,8 +112,7 @@ export function progressFor(playerId: number, tag?: string): PuzzleProgress {
         ? and(eq(puzzleAttempts.playerId, playerId), eq(puzzleAttempts.tag, tag))
         : eq(puzzleAttempts.playerId, playerId),
     )
-    .orderBy(desc(puzzleAttempts.attemptedAt))
-    .all();
+    .orderBy(desc(puzzleAttempts.attemptedAt));
 
   return {
     attempts: rows.length,

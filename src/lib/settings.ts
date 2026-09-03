@@ -12,20 +12,22 @@ export const SETTING_KEYS = {
   contact: "contact",
 } as const;
 
-export function getSetting(key: string): string | null {
-  return db.select().from(settings).where(eq(settings.key, key)).get()?.value ?? null;
+export async function getSetting(key: string): Promise<string | null> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
+  return row?.value ?? null;
 }
 
-export function setSetting(key: string, value: string) {
-  db.insert(settings)
+export async function setSetting(key: string, value: string) {
+  await db
+    .insert(settings)
     .values({ key, value })
     .onConflictDoUpdate({
       target: settings.key,
       set: { value, updatedAt: sql`(unixepoch())` },
-    })
-    .run();
+    });
 }
 
-export function getAllSettings(): Record<string, string> {
-  return Object.fromEntries(db.select().from(settings).all().map((r) => [r.key, r.value]));
+export async function getAllSettings(): Promise<Record<string, string>> {
+  const rows = await db.select().from(settings);
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }

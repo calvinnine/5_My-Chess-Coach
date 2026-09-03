@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const state = startAnalysis({ gameIds: [Number(id)] });
+    const state = await startAnalysis({ gameIds: [Number(id)] });
     return ok(state, { status: 202 });
   } catch (err) {
     return handleError(err);

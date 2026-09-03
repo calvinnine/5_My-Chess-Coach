@@ -19,7 +19,11 @@ export async function PUT(
   try {
     const { id } = await params;
     const gameId = Number(id);
-    const game = db.select({ id: games.id }).from(games).where(eq(games.id, gameId)).get();
+    const [game] = await db
+      .select({ id: games.id })
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1);
     if (!game) return fail("게임을 찾을 수 없습니다.", 404);
 
     const parsed = bodySchema.safeParse(await request.json());
@@ -30,13 +34,13 @@ export async function PUT(
       userPostmortem: parsed.data.userPostmortem ?? null,
     };
 
-    db.insert(gameReviews)
+    await db
+      .insert(gameReviews)
       .values({ gameId, ...values, generatedBy: "user" })
       .onConflictDoUpdate({
         target: gameReviews.gameId,
         set: { ...values, createdAt: sql`(unixepoch())` },
-      })
-      .run();
+      });
 
     return ok({ saved: true, ...values });
   } catch (err) {

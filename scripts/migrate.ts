@@ -1,10 +1,10 @@
-import path from "node:path";
+import { resolveLocation } from "../src/db/location";
 import { runMigrations } from "../src/db/migrate";
 
-const dbPath = path.resolve(process.env.CHESS_COACH_DB ?? "./data/chess-coach.db");
-const { ran, total } = runMigrations(dbPath);
+const location = resolveLocation();
+const { ran, total } = await runMigrations(location);
 console.log(
   ran.length
-    ? `Applied ${ran.length}/${total} migration(s) to ${dbPath}:\n  ${ran.join("\n  ")}`
-    : `Database at ${dbPath} is up to date (${total} migration(s) on record).`,
+    ? `Applied ${ran.length}/${total} migration(s) to ${location.label}:\n  ${ran.join("\n  ")}`
+    : `Database at ${location.label} is up to date (${total} migration(s) on record).`,
 );

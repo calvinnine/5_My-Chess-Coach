@@ -1,6 +1,6 @@
 import "server-only";
-import path from "node:path";
 import { runMigrations } from "@/db/migrate";
+import { resolveLocation } from "@/db/location";
 import { recoverStaleJobs } from "@/lib/analysis/job";
 
 /**
@@ -11,11 +11,9 @@ import { recoverStaleJobs } from "@/lib/analysis/job";
  * killed mid-analysis. Nothing is actually running at startup, so any such row
  * is stale and belongs back in the queue.
  */
-export function runStartupTasks() {
-  const dbPath = path.resolve(process.env.CHESS_COACH_DB ?? "./data/chess-coach.db");
-
+export async function runStartupTasks() {
   try {
-    const { ran } = runMigrations(dbPath);
+    const { ran } = await runMigrations(resolveLocation());
     if (ran.length > 0) console.log(`[chess-coach] 마이그레이션 ${ran.length}건 적용`);
   } catch (err) {
     console.error("[chess-coach] 마이그레이션 실패:", err);
@@ -23,7 +21,7 @@ export function runStartupTasks() {
   }
 
   try {
-    const recovered = recoverStaleJobs();
+    const recovered = await recoverStaleJobs();
     if (recovered > 0) {
       console.log(`[chess-coach] 중단된 분석 ${recovered}건을 대기 상태로 되돌렸습니다.`);
     }

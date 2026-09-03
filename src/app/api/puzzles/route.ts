@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     if (playerId === null) return fail("playerId가 필요합니다.");
 
     if (params.get("counts") === "1") {
-      return ok({ counts: puzzleCountsByTag(playerId) });
+      return ok({ counts: await puzzleCountsByTag(playerId) });
     }
 
     const tag = params.get("tag") ?? undefined;
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
      * solution with the position would make the puzzle readable from the
      * network tab, which defeats the exercise; grading returns it instead.
      */
-    const puzzles = getPuzzles(playerId, { tag, limit: Math.min(limit, 50) }).map(
+    const puzzles = (await getPuzzles(playerId, { tag, limit: Math.min(limit, 50) })).map(
       ({ solutionUci, solutionSan, playedSan, bestLine, ...rest }) => {
         void solutionUci;
         void solutionSan;
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       },
     );
 
-    return ok({ puzzles, progress: progressFor(playerId, tag) });
+    return ok({ puzzles, progress: await progressFor(playerId, tag) });
   } catch (err) {
     return handleError(err);
   }
@@ -54,13 +54,13 @@ export async function POST(request: Request) {
     const { playerId, puzzleId, tag, attemptUci } = parsed.data;
 
     // Re-derive the puzzle server-side: the client must not tell us the answer.
-    const puzzle = getPuzzles(playerId, { limit: Number.MAX_SAFE_INTEGER }).find(
+    const puzzle = (await getPuzzles(playerId, { limit: Number.MAX_SAFE_INTEGER })).find(
       (p) => p.id === puzzleId,
     );
     if (!puzzle) return fail("해당 문제를 찾을 수 없습니다.", 404);
 
     const correct = gradeAttempt(puzzle, attemptUci);
-    recordAttempt({
+    await recordAttempt({
       playerId,
       moveAnalysisId: puzzleId,
       tag: tag ?? null,
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       centipawnLoss: puzzle.centipawnLoss,
       gameId: puzzle.gameId,
       ply: puzzle.ply,
-      progress: progressFor(playerId, tag ?? undefined),
+      progress: await progressFor(playerId, tag ?? undefined),
     });
   } catch (err) {
     return handleError(err);

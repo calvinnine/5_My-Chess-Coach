@@ -8,11 +8,11 @@ export async function GET(request: Request) {
   try {
     const playerId = optionalPositiveInt(new URL(request.url).searchParams, "playerId");
     if (playerId === null) return fail("playerId가 필요합니다.");
-    const data = buildDashboard(playerId);
+    const data = await buildDashboard(playerId);
     if (!data) return fail("선수를 찾을 수 없습니다.", 404);
     // Keep the stored snapshot in step with what the dashboard just showed.
-    savePatterns(playerId, data.allPatterns);
-    saveTrainingTasks(playerId, data.trainingTasks);
+    await savePatterns(playerId, data.allPatterns);
+    await saveTrainingTasks(playerId, data.trainingTasks);
     return ok(data);
   } catch (err) {
     return handleError(err);

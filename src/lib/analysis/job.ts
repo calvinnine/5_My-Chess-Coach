@@ -68,18 +68,17 @@ export function requestCancel() {
  * A previous process died mid-analysis. Any row still marked `running` is not
  * actually running, so put it back in the queue.
  */
-export function recoverStaleJobs(): number {
-  const stale = db
+export async function recoverStaleJobs(): Promise<number> {
+  const stale = await db
     .update(games)
     .set({ analysisStatus: "pending", analysisError: null })
     .where(eq(games.analysisStatus, "running"))
-    .returning({ id: games.id })
-    .all();
+    .returning({ id: games.id });
   return stale.length;
 }
 
-export function currentSettings(): AnalysisSettings {
-  const preset = getSetting(SETTING_KEYS.analysisPreset) ?? "standard";
+export async function currentSettings(): Promise<AnalysisSettings> {
+  const preset = (await getSetting(SETTING_KEYS.analysisPreset)) ?? "standard";
   return PRESETS[preset] ?? PRESETS.standard;
 }
 
@@ -103,38 +102,51 @@ export class EngineMissingError extends Error {
  * Throws only when the job cannot be started at all (engine missing, or a job
  * is already running).
  */
-export function startAnalysis(options: StartOptions = {}): JobState {
+export async function startAnalysis(options: StartOptions = {}): Promise<JobState> {
   if (jobRef.state.running) throw new Error("이미 분석이 진행 중입니다.");
+  /*
+   * Claim the slot before the first `await`. While this function was
+   * synchronous the guard above was atomic; now that the settings and the
+   * target list are read asynchronously, two requests could both get past it
+   * and start two engines writing to the same games.
+   */
+  jobRef.state = { ...initialState, running: true, startedAt: Date.now() };
 
-  const location = locateEngine(getSetting(SETTING_KEYS.stockfishPath));
-  if (!location.found || !location.path) throw new EngineMissingError();
+  try {
+    const location = locateEngine(await getSetting(SETTING_KEYS.stockfishPath));
+    if (!location.found || !location.path) throw new EngineMissingError();
 
-  const targets = selectTargets(options);
-  if (targets.length === 0) {
-    return { ...jobRef.state, total: 0, stage: "done", finishedAt: Date.now() };
+    const targets = await selectTargets(options);
+    if (targets.length === 0) {
+      jobRef.state = { ...initialState, total: 0, stage: "done", finishedAt: Date.now() };
+      return getJobState();
+    }
+
+    const controller = new AbortController();
+    jobRef.controller = controller;
+    jobRef.state = {
+      ...jobRef.state,
+      total: targets.length,
+      engineVersion: location.version,
+    };
+
+    void runJob(
+      targets.map((g) => g.id),
+      location.path,
+      controller.signal,
+    );
+    return getJobState();
+  } catch (err) {
+    // Nothing is running, so the claim must not be left behind.
+    jobRef.state = { ...initialState };
+    jobRef.controller = null;
+    throw err;
   }
-
-  const controller = new AbortController();
-  jobRef.controller = controller;
-  jobRef.state = {
-    ...initialState,
-    running: true,
-    total: targets.length,
-    startedAt: Date.now(),
-    engineVersion: location.version,
-  };
-
-  void runJob(
-    targets.map((g) => g.id),
-    location.path,
-    controller.signal,
-  );
-  return getJobState();
 }
 
-function selectTargets(options: StartOptions) {
+async function selectTargets(options: StartOptions) {
   if (options.gameIds?.length) {
-    return db
+    return await db
       .select({ id: games.id })
       .from(games)
       .where(
@@ -143,10 +155,9 @@ function selectTargets(options: StartOptions) {
           eq(games.rules, "chess"),
           eq(games.opponentKind, "human"),
         ),
-      )
-      .all();
+      );
   }
-  const rows = db
+  const rows = await db
     .select({ id: games.id, playedAt: games.playedAt })
     .from(games)
     .where(
@@ -162,16 +173,15 @@ function selectTargets(options: StartOptions) {
             eq(games.rules, "chess"),
             eq(games.opponentKind, "human"),
           ),
-    )
-    .all()
-    .sort((a, b) => b.playedAt - a.playedAt);
+    );
+  rows.sort((a, b) => b.playedAt - a.playedAt);
   return rows.slice(0, options.limit ?? 10);
 }
 
 async function runJob(gameIds: number[], binaryPath: string, signal: AbortSignal) {
-  const settings = currentSettings();
-  const threads = Number(getSetting(SETTING_KEYS.threads) ?? 2);
-  const hashMb = Number(getSetting(SETTING_KEYS.hashMb) ?? 128);
+  const settings = await currentSettings();
+  const threads = Number((await getSetting(SETTING_KEYS.threads)) ?? 2);
+  const hashMb = Number((await getSetting(SETTING_KEYS.hashMb)) ?? 128);
   const engine = new UciEngine({
     binaryPath,
     threads: Number.isFinite(threads) ? threads : 2,
@@ -186,7 +196,7 @@ async function runJob(gameIds: number[], binaryPath: string, signal: AbortSignal
 
     for (const gameId of gameIds) {
       if (signal.aborted) break;
-      const game = db.select().from(games).where(eq(games.id, gameId)).get();
+      const [game] = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
       if (!game) continue;
 
       jobRef.state.currentGameId = gameId;
@@ -195,10 +205,10 @@ async function runJob(gameIds: number[], binaryPath: string, signal: AbortSignal
       jobRef.state.positionsTotal = 0;
       jobRef.state.stage = "scan";
 
-      db.update(games)
+      await db
+        .update(games)
         .set({ analysisStatus: "running", analysisError: null })
-        .where(eq(games.id, gameId))
-        .run();
+        .where(eq(games.id, gameId));
 
       try {
         const result = await analyzeGame(
@@ -216,26 +226,26 @@ async function runJob(gameIds: number[], binaryPath: string, signal: AbortSignal
           },
         );
 
-        persistAnalysis(gameId, game, result);
+        await persistAnalysis(gameId, game, result);
         jobRef.state.completed++;
       } catch (err) {
         if (err instanceof AbortError || signal.aborted) {
           // Leave it pending so it can be picked up again next run.
-          db.update(games)
+          await db
+            .update(games)
             .set({ analysisStatus: "pending" })
-            .where(eq(games.id, gameId))
-            .run();
+            .where(eq(games.id, gameId));
           break;
         }
         jobRef.state.failed++;
         jobRef.state.lastError = err instanceof Error ? err.message : String(err);
-        db.update(games)
+        await db
+          .update(games)
           .set({
             analysisStatus: "failed",
             analysisError: jobRef.state.lastError,
           })
-          .where(eq(games.id, gameId))
-          .run();
+          .where(eq(games.id, gameId));
       }
     }
   } catch (err) {
@@ -251,7 +261,7 @@ async function runJob(gameIds: number[], binaryPath: string, signal: AbortSignal
   }
 }
 
-function persistAnalysis(
+async function persistAnalysis(
   gameId: number,
   game: typeof games.$inferSelect,
   result: Awaited<ReturnType<typeof analyzeGame>>,
@@ -265,44 +275,43 @@ function persistAnalysis(
   });
 
   const version = analysisVersion(result.engineVersion, result.settings);
-  const existingReview = db
+  const [existingReview] = await db
     .select({ userThoughts: gameReviews.userThoughts, userPostmortem: gameReviews.userPostmortem })
     .from(gameReviews)
     .where(eq(gameReviews.gameId, gameId))
-    .get();
+    .limit(1);
 
-  db.transaction((tx) => {
-    tx.delete(moveAnalyses).where(eq(moveAnalyses.gameId, gameId)).run();
+  await db.transaction(async (tx) => {
+    await tx.delete(moveAnalyses).where(eq(moveAnalyses.gameId, gameId));
     for (const move of result.moves) {
-      tx.insert(moveAnalyses)
-        .values({
-          gameId,
-          ply: move.ply,
-          moveNumber: move.moveNumber,
-          color: move.color,
-          san: move.san,
-          uci: move.uci,
-          fenBefore: move.fenBefore,
-          fenAfter: move.fenAfter,
-          evalBeforeCp: move.evalBefore.cp,
-          evalAfterCp: move.evalAfter.cp,
-          mateBefore: move.evalBefore.mate,
-          mateAfter: move.evalAfter.mate,
-          bestMoveUci: move.bestMoveUci,
-          bestMoveSan: move.bestMoveSan,
-          bestLine: move.bestLine,
-          secondBestCp: move.secondBestCp,
-          centipawnLoss: move.centipawnLoss,
-          classification: move.classification,
-          themesJson: JSON.stringify({ themes: move.themes, strengths: move.strengths }),
-          clockMs: move.clockMs,
-          phase: move.phase,
-          isPlayerMove: move.isPlayerMove,
-        })
-        .run();
+      await tx.insert(moveAnalyses).values({
+        gameId,
+        ply: move.ply,
+        moveNumber: move.moveNumber,
+        color: move.color,
+        san: move.san,
+        uci: move.uci,
+        fenBefore: move.fenBefore,
+        fenAfter: move.fenAfter,
+        evalBeforeCp: move.evalBefore.cp,
+        evalAfterCp: move.evalAfter.cp,
+        mateBefore: move.evalBefore.mate,
+        mateAfter: move.evalAfter.mate,
+        bestMoveUci: move.bestMoveUci,
+        bestMoveSan: move.bestMoveSan,
+        bestLine: move.bestLine,
+        secondBestCp: move.secondBestCp,
+        centipawnLoss: move.centipawnLoss,
+        classification: move.classification,
+        themesJson: JSON.stringify({ themes: move.themes, strengths: move.strengths }),
+        clockMs: move.clockMs,
+        phase: move.phase,
+        isPlayerMove: move.isPlayerMove,
+      });
     }
 
-    tx.insert(gameReviews)
+    await tx
+      .insert(gameReviews)
       .values({
         gameId,
         turningPointsJson: JSON.stringify(review.turningPoints),
@@ -333,12 +342,11 @@ function persistAnalysis(
           reflectionQuestion: review.reflectionQuestion,
           generatedBy: "rules",
         },
-      })
-      .run();
+      });
 
-    tx.update(games)
+    await tx
+      .update(games)
       .set({ analysisStatus: "completed", analysisVersion: version, analysisError: null })
-      .where(eq(games.id, gameId))
-      .run();
+      .where(eq(games.id, gameId));
   });
 }

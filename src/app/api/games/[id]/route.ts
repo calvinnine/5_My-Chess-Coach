@@ -14,17 +14,17 @@ export async function GET(
   try {
     const { id } = await params;
     const gameId = Number(id);
-    const game = db.select().from(games).where(eq(games.id, gameId)).get();
+    const [game] = await db.select().from(games).where(eq(games.id, gameId)).limit(1);
     if (!game) return fail("게임을 찾을 수 없습니다.", 404);
 
-    const moves = db
-      .select()
-      .from(moveAnalyses)
-      .where(eq(moveAnalyses.gameId, gameId))
-      .orderBy(asc(moveAnalyses.ply))
-      .all();
-
-    const review = db.select().from(gameReviews).where(eq(gameReviews.gameId, gameId)).get();
+    const [moves, [review]] = await Promise.all([
+      db
+        .select()
+        .from(moveAnalyses)
+        .where(eq(moveAnalyses.gameId, gameId))
+        .orderBy(asc(moveAnalyses.ply)),
+      db.select().from(gameReviews).where(eq(gameReviews.gameId, gameId)).limit(1),
+    ]);
     const playerColor = game.playerColor as Color;
 
     return ok({

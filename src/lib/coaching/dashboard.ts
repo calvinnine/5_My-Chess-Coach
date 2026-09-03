@@ -108,8 +108,8 @@ function tally(rows: Array<{ result: string }>): RecordSummary {
  * `aggregatePatterns`, and below MIN_SAMPLE_GAMES analysed games the UI is told
  * to render "관찰 중" instead of a diagnosis.
  */
-export function buildDashboard(playerId: number): DashboardData | null {
-  const player = db.select().from(players).where(eq(players.id, playerId)).get();
+export async function buildDashboard(playerId: number): Promise<DashboardData | null> {
+  const [player] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
   if (!player) return null;
 
   /*
@@ -117,29 +117,26 @@ export function buildDashboard(playerId: number): DashboardData | null {
    * training games are still stored and browsable, but including them would
    * distort win rates, opening records, and every pattern threshold.
    */
-  const allGames = db
+  const allGames = await db
     .select()
     .from(games)
     .where(and(eq(games.playerId, playerId), eq(games.opponentKind, "human")))
-    .orderBy(desc(games.playedAt))
-    .all();
+    .orderBy(desc(games.playedAt));
 
-  const practiceGameCount =
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(games)
-      .where(and(eq(games.playerId, playerId), ne(games.opponentKind, "human")))
-      .get()?.count ?? 0;
+  const [practiceRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(games)
+    .where(and(eq(games.playerId, playerId), ne(games.opponentKind, "human")));
+  const practiceGameCount = practiceRow?.count ?? 0;
 
   const analyzed = allGames.filter((g) => g.analysisStatus === "completed");
   const pending = allGames.filter((g) => g.analysisStatus === "pending");
 
-  const ratings = db
+  const ratings = await db
     .select()
     .from(playerRatings)
     .where(eq(playerRatings.playerId, playerId))
-    .orderBy(desc(playerRatings.recordedAt))
-    .all();
+    .orderBy(desc(playerRatings.recordedAt));
 
   const latestByClass = new Map<string, (typeof ratings)[number]>();
   for (const r of ratings) if (!latestByClass.has(r.timeClass)) latestByClass.set(r.timeClass, r);
@@ -162,11 +159,10 @@ export function buildDashboard(playerId: number): DashboardData | null {
 
   const analyzedIds = analyzed.map((g) => g.id);
   const moves = analyzedIds.length
-    ? db
+    ? await db
         .select()
         .from(moveAnalyses)
         .where(and(inArray(moveAnalyses.gameId, analyzedIds), eq(moveAnalyses.isPlayerMove, true)))
-        .all()
     : [];
 
   const losses = moves.map((m) => m.centipawnLoss ?? 0);
@@ -178,16 +174,10 @@ export function buildDashboard(playerId: number): DashboardData | null {
     analyzed.length ? Math.round((n / analyzed.length) * 100) / 100 : null;
 
   // Occurrences for pattern aggregation come from the stored themes.
-  const reviewsById = new Map(
-    analyzedIds.length
-      ? db
-          .select()
-          .from(gameReviews)
-          .where(inArray(gameReviews.gameId, analyzedIds))
-          .all()
-          .map((r) => [r.gameId, r])
-      : [],
-  );
+  const reviewRows = analyzedIds.length
+    ? await db.select().from(gameReviews).where(inArray(gameReviews.gameId, analyzedIds))
+    : [];
+  const reviewsById = new Map(reviewRows.map((r) => [r.gameId, r]));
 
   const movesByGame = new Map<number, typeof moves>();
   for (const m of moves) {
@@ -418,12 +408,11 @@ export function buildDashboard(playerId: number): DashboardData | null {
  * snapshot. The dashboard itself renders from the in-memory result; this keeps
  * the stored copy in step so exports and later queries see the same picture.
  */
-export function savePatterns(playerId: number, computed: AggregatedPattern[]) {
-  db.transaction((tx) => {
-    tx.delete(patternsTable).where(eq(patternsTable.playerId, playerId)).run();
+export async function savePatterns(playerId: number, computed: AggregatedPattern[]) {
+  await db.transaction(async (tx) => {
+    await tx.delete(patternsTable).where(eq(patternsTable.playerId, playerId));
     for (const p of computed) {
-      tx.insert(patternsTable)
-        .values({
+      await tx.insert(patternsTable).values({
           playerId,
           patternType: p.patternType,
           tag: p.tag,
@@ -439,24 +428,22 @@ export function savePatterns(playerId: number, computed: AggregatedPattern[]) {
           status: p.status,
           evidenceGameIdsJson: JSON.stringify(p.evidenceGameIds),
           evidenceJson: JSON.stringify(p.evidence),
-          periodStart: p.periodStart,
-          periodEnd: p.periodEnd,
-        })
-        .run();
+        periodStart: p.periodStart,
+        periodEnd: p.periodEnd,
+      });
     }
   });
 }
 
 /** Persists this week's tasks, replacing any still-open generated ones. */
-export function saveTrainingTasks(playerId: number, drafts: TrainingTaskDraft[]) {
+export async function saveTrainingTasks(playerId: number, drafts: TrainingTaskDraft[]) {
   const dueDate = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
-  db.transaction((tx) => {
-    tx.delete(trainingTasks)
-      .where(and(eq(trainingTasks.playerId, playerId), eq(trainingTasks.status, "open")))
-      .run();
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(trainingTasks)
+      .where(and(eq(trainingTasks.playerId, playerId), eq(trainingTasks.status, "open")));
     for (const draft of drafts) {
-      tx.insert(trainingTasks)
-        .values({
+      await tx.insert(trainingTasks).values({
           playerId,
           patternTag: draft.patternTag,
           title: draft.title,
@@ -464,11 +451,10 @@ export function saveTrainingTasks(playerId: number, drafts: TrainingTaskDraft[])
           targetCount: draft.targetCount,
           targetMinutes: draft.targetMinutes,
           completionCriteria: draft.completionCriteria,
-          dueDate,
-          status: "open",
-        })
-        .run();
+        dueDate,
+        status: "open",
+      });
     }
   });
-  return db.select().from(trainingTasks).where(eq(trainingTasks.playerId, playerId)).all();
+  return await db.select().from(trainingTasks).where(eq(trainingTasks.playerId, playerId));
 }

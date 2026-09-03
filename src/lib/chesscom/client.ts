@@ -27,9 +27,12 @@ export class ChessComError extends Error {
   }
 }
 
+/** The store may be in memory or in the database, so either shape is accepted. */
+type Awaitable<T> = T | Promise<T>;
+
 export interface ConditionalCache {
-  get(url: string): { etag?: string | null; lastModified?: string | null } | undefined;
-  set(url: string, value: { etag?: string | null; lastModified?: string | null }): void;
+  get(url: string): Awaitable<{ etag?: string | null; lastModified?: string | null } | undefined>;
+  set(url: string, value: { etag?: string | null; lastModified?: string | null }): Awaitable<void>;
 }
 
 export interface ChessComClientOptions {
@@ -110,7 +113,7 @@ export class ChessComClient {
     options: RequestOptions = {},
   ): Promise<FetchResult<unknown>> {
     const { useCache = true, storeCache = true } = options;
-    const cached = useCache ? this.cache?.get(url) : undefined;
+    const cached = useCache ? await this.cache?.get(url) : undefined;
     const headers: Record<string, string> = {
       "User-Agent": this.userAgent,
       Accept: "application/json",
@@ -179,7 +182,7 @@ export class ChessComClient {
         etag: res.headers.get("etag"),
         lastModified: res.headers.get("last-modified"),
       };
-      if (storeCache) this.cache?.set(url, cacheHeaders);
+      if (storeCache) await this.cache?.set(url, cacheHeaders);
 
       let json: unknown;
       try {
@@ -285,9 +288,9 @@ export class ChessComClient {
    * Records a month's validators once the caller has durably stored every game
    * from that response. Skipping this simply means the month is re-fetched.
    */
-  commitCache(url: string, headers: CacheHeaders | null) {
+  async commitCache(url: string, headers: CacheHeaders | null) {
     if (!headers) return;
-    this.cache?.set(url, headers);
+    await this.cache?.set(url, headers);
   }
 }
 

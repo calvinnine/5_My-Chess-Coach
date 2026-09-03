@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     return ok({
-      settings: getAllSettings(),
+      settings: await getAllSettings(),
       presets: PRESETS,
-      engine: locateEngine(getSetting(SETTING_KEYS.stockfishPath)),
+      engine: locateEngine(await getSetting(SETTING_KEYS.stockfishPath)),
     });
   } catch (err) {
     return handleError(err);
@@ -33,15 +33,15 @@ export async function PUT(request: Request) {
     if (!parsed.success) return fail("설정 형식이 올바르지 않습니다.");
     const d = parsed.data;
     if (d.stockfishPath !== undefined)
-      setSetting(SETTING_KEYS.stockfishPath, d.stockfishPath ?? "");
-    if (d.analysisPreset) setSetting(SETTING_KEYS.analysisPreset, d.analysisPreset);
-    if (d.threads !== undefined) setSetting(SETTING_KEYS.threads, String(d.threads));
-    if (d.hashMb !== undefined) setSetting(SETTING_KEYS.hashMb, String(d.hashMb));
-    if (d.contact !== undefined) setSetting(SETTING_KEYS.contact, d.contact);
+      await setSetting(SETTING_KEYS.stockfishPath, d.stockfishPath ?? "");
+    if (d.analysisPreset) await setSetting(SETTING_KEYS.analysisPreset, d.analysisPreset);
+    if (d.threads !== undefined) await setSetting(SETTING_KEYS.threads, String(d.threads));
+    if (d.hashMb !== undefined) await setSetting(SETTING_KEYS.hashMb, String(d.hashMb));
+    if (d.contact !== undefined) await setSetting(SETTING_KEYS.contact, d.contact);
 
     return ok({
-      settings: getAllSettings(),
-      engine: locateEngine(getSetting(SETTING_KEYS.stockfishPath)),
+      settings: await getAllSettings(),
+      engine: locateEngine(await getSetting(SETTING_KEYS.stockfishPath)),
     });
   } catch (err) {
     return handleError(err);

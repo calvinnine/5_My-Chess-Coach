@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(body);
-    const state = startAnalysis(parsed.success ? parsed.data : {});
+    const state = await startAnalysis(parsed.success ? parsed.data : {});
     return ok(state, { status: 202 });
   } catch (err) {
     return handleError(err);

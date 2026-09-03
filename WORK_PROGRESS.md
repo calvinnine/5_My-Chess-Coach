@@ -93,7 +93,7 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
       `WasmEngine` 추가. 판정·코칭 로직 변경 0줄. 테스트 97 → 108개.
       교차 검증: 평가 차 중앙값 < 50cp, 승패 방향 일치 > 90%, 분기점 정확히 일치.
 - [ ] Phase B — Web Worker 분석 경로, 결과 업로드 + 서버 검증
-- [ ] Phase C — 다중 사용자 저장소(Turso 우선), 전역 API 큐, 어뷰즈 상한
+- [x] Phase C — libSQL 전환 완료 (2026-09-02). 전역 API 큐·어뷰즈 상한은 아직
 
 ## 현재 진단 (전량 621판 분석 완료)
 
@@ -171,14 +171,34 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 
 **결론: Phase B + C를 끝내기 전에는 배포해도 화면만 뜨는 앱이 된다.**
 
-### Phase C — 저장소 (먼저)
-- [ ] 로컬 SQLite → **Turso(libSQL)**. Drizzle `dialect: "sqlite"` 유지하므로 드라이버만
-      교체하면 마이그레이션 4개가 재사용될 것으로 **추정**(미검증).
-      `drizzle-orm/libsql` 서브패스 존재 확인함, `@libsql/client` 0.17.4.
-- [ ] `db/client.ts`·`db/migrate.ts`·`scripts/backup.ts`가 `better-sqlite3`를 직접 참조 →
-      드라이버 추상화 필요
-- [ ] 로컬 개발은 파일 SQLite, 배포는 Turso로 분기
-- [ ] 백업 기능 재설계 (파일 복사 불가 → 내보내기로 대체)
+### Phase C — 저장소 ✅ (2026-09-02 완료)
+- [x] `better-sqlite3` 제거, **libSQL 드라이버 하나로 통일**. 로컬은 `file:` URL,
+      배포는 `libsql://`. 이중 드라이버는 배포 경로가 처음 실행되는 구조라 버렸다 (D25).
+- [x] 마이그레이션 4개 **그대로 재사용됨**(추정이었고, 실제 DB에 적용해 확인). 스키마
+      변경 없음.
+- [x] 위치 판단을 `src/db/location.ts`로 분리 — `client.ts`가 `server-only`라
+      마이그레이션 스크립트가 가져다 쓸 수 없다.
+- [x] **동기 데이터 접근 63곳 + 트랜잭션 3곳을 async로 전환** (D26). libSQL은 비동기
+      전용이라 드라이버 교체만으로는 안 됐다.
+- [x] 백업: 로컬은 `VACUUM INTO` 유지, 원격은 409로 거부 (D27). 사라질 파일을 쓰고
+      성공했다고 답하지 않는다.
+- [x] lint / typecheck / 단위 172 / E2E 9 통과. 빌드 경고 0
+      (기존에 있던 `path.resolve` 동적 경로 경고도 함께 제거).
+
+**실측으로 확인한 libSQL과 better-sqlite3의 차이** (둘 다 기본값이 반대):
+- `foreign_keys`: libSQL은 **기본 ON**이고 강제된다 (better-sqlite3는 OFF)
+- `journal_mode`: libSQL은 **기본 delete**. WAL은 명시적으로 켜야 한다
+
+**성능**: 3,200행 쓰기가 9ms → 62ms(배치)로 느려지지만, 한 판 분석은 엔진에서만
+30~60초다. 판단 기준이 되지 못한다.
+
+**남은 것**: 실제 Turso 데이터베이스 생성은 계정 자격 증명이 필요해 형이 직접 해야 한다.
+```
+turso db create chess-coach
+turso db show chess-coach --url      # → TURSO_DATABASE_URL
+turso db tokens create chess-coach   # → TURSO_AUTH_TOKEN
+npm run db:migrate                   # 두 값을 넣고 실행하면 원격에 스키마 생성
+```
 
 ### Phase B — 브라우저 분석
 - [ ] 빌드 시 `stockfish-18-lite-single.{js,wasm}`(7MB)만 `public/engine/`로 복사
@@ -238,7 +258,7 @@ Chess.com 게임을 자동 수집하고 로컬 Stockfish로 분석해, 개별 �
 
 ## 다음 할 일
 
-- [ ] Phase C(Turso) → Phase B(브라우저 분석) → 배포 순서로 진행
+- [x] Phase C(libSQL 전환) 완료 → **다음은 Phase B(브라우저 분석)** → 배포
 - [ ] Chess.com OAuth 신청서 제출 (배포 주소 확정 후)
 - [ ] 본인 확인 방법 B 구현
 - [ ] 타임아웃 실패 7판 재시도 (`analysis_status='failed'` → `pending`)

@@ -9,12 +9,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const playerId = optionalPositiveInt(new URL(request.url).searchParams, "playerId");
-    const rows = db
+    const rows = await db
       .select({ pgn: games.pgn })
       .from(games)
       .where(playerId === null ? undefined : eq(games.playerId, playerId))
-      .orderBy(desc(games.playedAt))
-      .all();
+      .orderBy(desc(games.playedAt));
     const body = rows.map((r) => r.pgn.trim()).join("\n\n");
     return new Response(body, {
       headers: {

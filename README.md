@@ -78,6 +78,9 @@ Stockfish가 설치되어 있지 않으면 엔진이 필요한 단위 테스트�
 ## 데이터 관리
 
 - 데이터베이스: `data/chess-coach.db` (`CHESS_COACH_DB`로 변경 가능)
+- 드라이버는 libSQL 하나입니다. 로컬은 파일, 호스팅 배포는
+  `TURSO_DATABASE_URL`·`TURSO_AUTH_TOKEN`을 설정하면 같은 코드가 그대로 씁니다
+  (설정 시 `CHESS_COACH_DB`는 무시됩니다). 백업은 로컬 파일에서만 동작합니다.
 - 백업: 설정 화면의 **지금 백업** 또는 `npm run db:backup` → `data/backups/`
 - 복원: 앱을 종료하고 백업 파일을 `data/chess-coach.db` 위치로 복사
 - 내보내기: 설정 화면에서 PGN 전체와 분석 결과 JSON을 받을 수 있습니다

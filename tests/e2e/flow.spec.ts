@@ -3,9 +3,9 @@ import { countGames, resetDatabase, seedPlayer } from "./seed";
 
 test.describe.configure({ mode: "serial" });
 
-test.beforeAll(() => {
-  resetDatabase();
-  seedPlayer({ gameCount: 6 });
+test.beforeAll(async () => {
+  await resetDatabase();
+  await seedPlayer({ gameCount: 6 });
 });
 
 test("the app reports a healthy database and locates the engine", async ({ request }) => {
@@ -87,12 +87,12 @@ test("review notes persist across a reload", async ({ page }) => {
 });
 
 test("a repeated sync adds no duplicate games", async ({ request }) => {
-  const before = countGames();
+  const before = await countGames();
   // Re-inserting the same external URLs must be rejected by the unique index.
   const res = await request.get("/api/games?limit=500");
   expect(res.ok()).toBe(true);
   expect((await res.json()).games.length).toBe(before);
-  expect(countGames()).toBe(before);
+  expect(await countGames()).toBe(before);
 });
 
 test("backup produces a restorable copy", async ({ request }) => {

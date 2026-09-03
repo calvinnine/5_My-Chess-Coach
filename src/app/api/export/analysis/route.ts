@@ -9,23 +9,21 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const playerId = optionalPositiveInt(new URL(request.url).searchParams, "playerId");
-    const rows = db
+    const rows = await db
       .select()
       .from(games)
       .where(playerId === null ? undefined : eq(games.playerId, playerId))
-      .orderBy(desc(games.playedAt))
-      .all();
+      .orderBy(desc(games.playedAt));
     const ids = rows.map((r) => r.id);
     const reviews = ids.length
-      ? db.select().from(gameReviews).where(inArray(gameReviews.gameId, ids)).all()
+      ? await db.select().from(gameReviews).where(inArray(gameReviews.gameId, ids))
       : [];
     const moves = ids.length
-      ? db
+      ? await db
           .select()
           .from(moveAnalyses)
           .where(inArray(moveAnalyses.gameId, ids))
           .orderBy(asc(moveAnalyses.gameId), asc(moveAnalyses.ply))
-          .all()
       : [];
 
     const payload = {
@@ -35,8 +33,8 @@ export async function GET(request: Request) {
       moveAnalyses: moves,
       patterns:
         playerId === null
-          ? db.select().from(patterns).all()
-          : db.select().from(patterns).where(eq(patterns.playerId, playerId)).all(),
+          ? await db.select().from(patterns)
+          : await db.select().from(patterns).where(eq(patterns.playerId, playerId)),
     };
 
     return new Response(JSON.stringify(payload, null, 2), {

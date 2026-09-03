@@ -18,12 +18,13 @@ const DEFAULT_FIRST_RUN_MONTHS = 3;
 
 /** SQLite-backed ETag store so repeat syncs stay cheap and polite. */
 const dbCache: ConditionalCache = {
-  get(url) {
-    const row = db.select().from(syncCache).where(eq(syncCache.url, url)).get();
+  async get(url) {
+    const [row] = await db.select().from(syncCache).where(eq(syncCache.url, url)).limit(1);
     return row ? { etag: row.etag, lastModified: row.lastModified } : undefined;
   },
-  set(url, value) {
-    db.insert(syncCache)
+  async set(url, value) {
+    await db
+      .insert(syncCache)
       .values({ url, etag: value.etag ?? null, lastModified: value.lastModified ?? null })
       .onConflictDoUpdate({
         target: syncCache.url,
@@ -32,8 +33,7 @@ const dbCache: ConditionalCache = {
           lastModified: value.lastModified ?? null,
           fetchedAt: sql`(unixepoch())`,
         },
-      })
-      .run();
+      });
   },
 };
 
@@ -73,24 +73,27 @@ export async function registerPlayer(rawUsername: string): Promise<RegisterResul
     throw new ChessComError("프로필 응답이 비어 있습니다.", "invalid_response");
   }
 
-  const existing = db.select().from(players).where(eq(players.username, username)).get();
+  const [existing] = await db
+    .select()
+    .from(players)
+    .where(eq(players.username, username))
+    .limit(1);
   let playerId: number;
   if (existing) {
     playerId = existing.id;
-    db.update(players)
+    await db
+      .update(players)
       .set({ displayName: profile.username, joinedAt: profile.joined ?? existing.joinedAt })
-      .where(eq(players.id, playerId))
-      .run();
+      .where(eq(players.id, playerId));
   } else {
-    const inserted = db
+    const [inserted] = await db
       .insert(players)
       .values({
         username,
         displayName: profile.username,
         joinedAt: profile.joined ?? null,
       })
-      .returning({ id: players.id })
-      .get();
+      .returning({ id: players.id });
     playerId = inserted.id;
   }
 
@@ -106,18 +109,17 @@ export async function registerPlayer(rawUsername: string): Promise<RegisterResul
     for (const [timeClass, rating] of buckets) {
       if (typeof rating !== "number") continue;
       ratings.push({ timeClass, rating });
-      const latest = db
+      const [latest] = await db
         .select()
         .from(playerRatings)
         .where(
           and(eq(playerRatings.playerId, playerId), eq(playerRatings.timeClass, timeClass)),
         )
         .orderBy(sql`recorded_at desc`)
-        .limit(1)
-        .get();
+        .limit(1);
       // Only record a new point when the rating actually moved.
       if (!latest || latest.rating !== rating) {
-        db.insert(playerRatings).values({ playerId, timeClass, rating }).run();
+        await db.insert(playerRatings).values({ playerId, timeClass, rating });
       }
     }
   } catch {
@@ -163,7 +165,11 @@ export async function syncPlayerGames(
   options: SyncOptions = {},
 ): Promise<SyncSummary> {
   const normalized = username.trim().toLowerCase();
-  const player = db.select().from(players).where(eq(players.username, normalized)).get();
+  const [player] = await db
+    .select()
+    .from(players)
+    .where(eq(players.username, normalized))
+    .limit(1);
   if (!player) {
     throw new ChessComError("먼저 선수를 등록해 주세요.", "not_found");
   }
@@ -239,7 +245,7 @@ export async function syncPlayerGames(
         truncated = true;
         break;
       }
-      const outcome = storeGame(player.id, normalized, game);
+      const outcome = await storeGame(player.id, normalized, game);
       if (outcome === "inserted") {
         summary.inserted++;
         insertedThisMonth++;
@@ -266,18 +272,18 @@ export async function syncPlayerGames(
      * would make the next request a 304 and the unread games would never come.
      */
     if (!truncated) {
-      client.commitCache(monthly.url, monthly.cacheHeaders);
-      db.update(players)
+      await client.commitCache(monthly.url, monthly.cacheHeaders);
+      await db
+        .update(players)
         .set({ lastSyncedMonth: key, lastSyncedAt: Math.floor(Date.now() / 1000) })
-        .where(eq(players.id, player.id))
-        .run();
+        .where(eq(players.id, player.id));
     }
   }
 
-  db.update(players)
+  await db
+    .update(players)
     .set({ lastSyncedAt: Math.floor(Date.now() / 1000) })
-    .where(eq(players.id, player.id))
-    .run();
+    .where(eq(players.id, player.id));
 
   return summary;
 }
@@ -291,11 +297,11 @@ type StoreOutcome =
   | "practice"
   | "invalid";
 
-function storeGame(
+async function storeGame(
   playerId: number,
   username: string,
   game: ChessComGame,
-): StoreOutcome {
+): Promise<StoreOutcome> {
   if (!game.pgn) return "invalid";
 
   const isWhite = game.white.username.toLowerCase() === username;
@@ -310,11 +316,11 @@ function storeGame(
   const externalUrl =
     game.url ?? `pgnhash:${crypto.createHash("sha1").update(game.pgn).digest("hex")}`;
 
-  const existing = db
+  const [existing] = await db
     .select({ id: games.id })
     .from(games)
     .where(eq(games.externalUrl, externalUrl))
-    .get();
+    .limit(1);
   if (existing) return "duplicate";
 
   const rules = game.rules ?? "chess";
@@ -342,40 +348,38 @@ function storeGame(
 
   const accuracy = isWhite ? game.accuracies?.white : game.accuracies?.black;
 
-  db.insert(games)
-    .values({
-      externalUrl,
-      playerId,
-      playedAt: game.end_time ?? Math.floor(Date.now() / 1000),
-      timeClass: game.time_class ?? "unknown",
-      timeControl: game.time_control ?? "unknown",
-      rules,
-      opponentKind,
-      rated: game.rated ?? false,
-      playerColor,
-      playerRating: side.rating ?? null,
-      opponentUsername: opponent.username,
-      opponentRating: opponent.rating ?? null,
-      result: resultFor(side.result),
-      termination: TERMINATION_LABELS[side.result ?? ""] ?? side.result ?? null,
-      ecoCode,
-      openingName,
-      pgn: game.pgn,
-      finalFen,
-      chesscomAccuracy: typeof accuracy === "number" ? accuracy : null,
-      // An aborted game has nothing to analyse; that is "skipped", not "failed".
-      analysisStatus:
-        !isStandard || noMoves || !isHuman
-          ? "skipped"
-          : parseError
-            ? "failed"
-            : "pending",
-      analysisError: isHuman
-        ? parseError
-        : "코치·봇 연습 게임은 분석 대상에서 제외합니다.",
-      parseError,
-    })
-    .run();
+  await db.insert(games).values({
+    externalUrl,
+    playerId,
+    playedAt: game.end_time ?? Math.floor(Date.now() / 1000),
+    timeClass: game.time_class ?? "unknown",
+    timeControl: game.time_control ?? "unknown",
+    rules,
+    opponentKind,
+    rated: game.rated ?? false,
+    playerColor,
+    playerRating: side.rating ?? null,
+    opponentUsername: opponent.username,
+    opponentRating: opponent.rating ?? null,
+    result: resultFor(side.result),
+    termination: TERMINATION_LABELS[side.result ?? ""] ?? side.result ?? null,
+    ecoCode,
+    openingName,
+    pgn: game.pgn,
+    finalFen,
+    chesscomAccuracy: typeof accuracy === "number" ? accuracy : null,
+    // An aborted game has nothing to analyse; that is "skipped", not "failed".
+    analysisStatus:
+      !isStandard || noMoves || !isHuman
+        ? "skipped"
+        : parseError
+          ? "failed"
+          : "pending",
+    analysisError: isHuman
+      ? parseError
+      : "코치·봇 연습 게임은 분석 대상에서 제외합니다.",
+    parseError,
+  });
 
   if (!isStandard) return "variant";
   if (!isHuman) return "practice";

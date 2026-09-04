@@ -1,0 +1,2 @@
+ALTER TABLE `verification_challenges` ADD `requester_hash` text;--> statement-breakpoint
+CREATE INDEX `verification_challenges_requester_idx` ON `verification_challenges` (`requester_hash`,`expires_at`);

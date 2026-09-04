@@ -20,7 +20,7 @@ import {
   TIME_CLASS_LABEL,
   formatDate,
 } from "@/components/ui";
-import { apiGet, apiSend, readActivePlayer, writeActivePlayer } from "@/lib/client-api";
+import { ApiError, apiGet, apiSend, readActivePlayer, writeActivePlayer } from "@/lib/client-api";
 import type { DashboardResponse, PlayerSummary, RecordSummary } from "@/types/api";
 
 const PHASES = [
@@ -105,7 +105,13 @@ export default function DashboardPage() {
       );
       await load(data.playerId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "동기화에 실패했습니다.");
+      /*
+       * Being told to wait is not a failure. Sending it to the error banner
+       * would read as "something broke" for what is a normal, expected answer
+       * when someone else is syncing or the cooldown has not elapsed.
+       */
+      if (err instanceof ApiError && err.status === 429) setSyncNote(err.message);
+      else setError(err instanceof Error ? err.message : "동기화에 실패했습니다.");
     } finally {
       setSyncing(false);
     }

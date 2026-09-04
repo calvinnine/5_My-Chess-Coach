@@ -74,10 +74,19 @@ export const verificationChallenges = sqliteTable(
     username: text("username").notNull(),
     code: text("code").notNull(),
     attempts: integer("attempts").notNull().default(0),
+    /**
+     * Hash of the requester's address, used only to cap how many challenges one
+     * caller may have outstanding. Hashed rather than stored raw: the address
+     * is personal data and equality is all this needs.
+     */
+    requesterHash: text("requester_hash"),
     createdAt: integer("created_at").notNull().default(now),
     expiresAt: integer("expires_at").notNull(),
   },
-  (t) => [uniqueIndex("verification_challenges_username_idx").on(t.username)],
+  (t) => [
+    uniqueIndex("verification_challenges_username_idx").on(t.username),
+    index("verification_challenges_requester_idx").on(t.requesterHash, t.expiresAt),
+  ],
 );
 
 export const playerRatings = sqliteTable(
@@ -285,6 +294,23 @@ export const puzzleAttempts = sqliteTable(
     index("puzzle_attempts_move_idx").on(t.moveAnalysisId),
   ],
 );
+
+/**
+ * The one permit to be talking to Chess.com right now.
+ *
+ * Chess.com asks that requests be serial. A queue inside the process cannot
+ * deliver that once the app is deployed: serverless instances scale out and
+ * each gets its own module state, so "global" has to mean the database.
+ *
+ * A single row, claimed by conditional update. The lease expires on its own so
+ * an instance killed mid-sync cannot block everyone else forever.
+ */
+export const syncLeases = sqliteTable("sync_leases", {
+  id: integer("id").primaryKey(),
+  holderPlayerId: integer("holder_player_id"),
+  acquiredAt: integer("acquired_at"),
+  expiresAt: integer("expires_at").notNull().default(0),
+});
 
 /** ETag / Last-Modified cache for conditional Chess.com requests. */
 export const syncCache = sqliteTable(

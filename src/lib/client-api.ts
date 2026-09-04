@@ -1,9 +1,44 @@
 "use client";
 
+/**
+ * A failed API call, carrying what the server said about it.
+ *
+ * The status and `kind` used to be thrown away, which left the screens unable
+ * to tell "this broke" from "wait a moment and try again" — both surfaced as
+ * the same red error.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly kind?: string,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+interface ErrorBody {
+  error?: string;
+  kind?: string;
+  retryAfterSeconds?: number;
+}
+
+function toApiError(body: unknown, status: number): ApiError {
+  const parsed = (body ?? {}) as ErrorBody;
+  return new ApiError(
+    parsed.error ?? `요청 실패 (${status})`,
+    status,
+    parsed.kind,
+    parsed.retryAfterSeconds,
+  );
+}
+
 export async function apiGet<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? `요청 실패 (${res.status})`);
+  if (!res.ok) throw toApiError(body, res.status);
   return body as T;
 }
 
@@ -18,8 +53,7 @@ export async function apiSend<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const parsed = await res.json().catch(() => ({}));
-  if (!res.ok)
-    throw new Error((parsed as { error?: string }).error ?? `요청 실패 (${res.status})`);
+  if (!res.ok) throw toApiError(parsed, res.status);
   return parsed as T;
 }
 

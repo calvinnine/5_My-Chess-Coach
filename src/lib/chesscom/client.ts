@@ -80,6 +80,14 @@ interface RequestOptions {
  * identifying User-Agent, honour ETag/Last-Modified, and back off on 429.
  * No credentials are involved: every endpoint here is public.
  */
+/** Where this copy is running, for the User-Agent. */
+function describeDeployment(): string {
+  const url =
+    process.env.CHESS_COACH_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+  return url ? `+${url}` : "personal single-user app";
+}
+
 export class ChessComClient {
   private readonly userAgent: string;
   private readonly cache?: ConditionalCache;
@@ -91,7 +99,12 @@ export class ChessComClient {
 
   constructor(opts: ChessComClientOptions = {}) {
     const contact = opts.contact ?? process.env.CHESS_COACH_CONTACT ?? "local-user";
-    this.userAgent = `ChessCoach/${APP_VERSION} (local single-user app; contact: ${contact})`;
+    /*
+     * Chess.com asks that requests identify who is making them. Saying
+     * "local single-user app" from a deployment would be false, so what this
+     * claims follows from where it is actually running.
+     */
+    this.userAgent = `ChessCoach/${APP_VERSION} (${describeDeployment()}; contact: ${contact})`;
     this.cache = opts.cache;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.sleep = opts.sleep ?? defaultSleep;

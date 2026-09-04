@@ -4,6 +4,8 @@ import { EngineMissingError } from "@/lib/analysis/job";
 import { AnalysisMismatchError } from "@/lib/analysis/analyzer";
 import { NotAuthenticatedError, NotOwnerError } from "@/lib/auth/session";
 import { NotFoundError } from "@/lib/auth/ownership";
+import { SyncBusyError, SyncCooldownError } from "@/lib/chesscom/limits";
+import { TooManyChallengesError } from "@/lib/auth/challenge-limits";
 
 /**
  * Reads an optional positive integer query param.
@@ -49,6 +51,16 @@ export function handleError(err: unknown) {
   }
   if (err instanceof NotFoundError) {
     return fail(err.message, 404);
+  }
+  if (err instanceof SyncBusyError || err instanceof SyncCooldownError) {
+    // Retry-After tells the client how long to wait instead of hammering.
+    return fail(err.message, 429, {
+      kind: err instanceof SyncBusyError ? "sync_busy" : "sync_cooldown",
+      retryAfterSeconds: err.retryAfterSeconds,
+    });
+  }
+  if (err instanceof TooManyChallengesError) {
+    return fail(err.message, 429, { kind: "too_many_challenges" });
   }
   if (err instanceof AnalysisMismatchError) {
     return fail(err.message, 422, { kind: "analysis_mismatch" });

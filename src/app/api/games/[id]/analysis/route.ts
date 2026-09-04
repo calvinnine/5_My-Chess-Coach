@@ -47,10 +47,12 @@ export async function POST(
     const gameId = Number(id);
     if (!Number.isInteger(gameId) || gameId <= 0) return fail("게임 번호가 올바르지 않습니다.");
 
+    // Ownership before parsing: the upload is large, and a caller with no
+    // claim to this game should never reach the validation of it.
+    const { game } = await requireOwnedGame(gameId);
+
     const parsed = bodySchema.safeParse(await request.json());
     if (!parsed.success) return fail("분석 결과 형식이 올바르지 않습니다.");
-
-    const { game } = await requireOwnedGame(gameId);
     if (game.rules !== "chess") return fail("표준 체스가 아닌 게임은 분석하지 않습니다.");
     if (game.opponentKind !== "human") {
       return fail("코치·봇 연습 게임은 분석 대상이 아닙니다.");

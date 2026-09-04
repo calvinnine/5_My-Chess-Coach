@@ -7,6 +7,11 @@ import {
   makeChallengeCode,
   normalizeUsername,
 } from "@/lib/auth/verification";
+import {
+  assertChallengeAllowed,
+  purgeExpiredChallenges,
+} from "@/lib/auth/challenge-limits";
+import { requesterHashOf } from "@/lib/auth/requester";
 import { fail, handleError, ok } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -28,16 +33,25 @@ export async function POST(request: Request) {
     const username = normalizeUsername(parsed.data.username);
     if (!username) return fail("Chess.com 사용자명 형식이 아닙니다.");
 
+    /*
+     * This route cannot require a session — it is how one is obtained — so it
+     * is the one place an anonymous caller writes to the database. Expired
+     * codes go first, so the caps below measure only what is still live.
+     */
+    await purgeExpiredChallenges();
+    const requesterHash = requesterHashOf(request);
+    await assertChallengeAllowed(requesterHash);
+
     const code = makeChallengeCode();
     const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS;
 
     // Asking again replaces the outstanding code and resets the attempt count.
     await db
       .insert(verificationChallenges)
-      .values({ username, code, expiresAt, attempts: 0 })
+      .values({ username, code, expiresAt, attempts: 0, requesterHash })
       .onConflictDoUpdate({
         target: verificationChallenges.username,
-        set: { code, expiresAt, attempts: 0, createdAt: sql`(unixepoch())` },
+        set: { code, expiresAt, attempts: 0, requesterHash, createdAt: sql`(unixepoch())` },
       });
 
     const [row] = await db

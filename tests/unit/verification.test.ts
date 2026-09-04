@@ -41,7 +41,7 @@ describe("proving the account is yours", () => {
 
   it("lets the owner keep their real name alongside the code", () => {
     expect(
-      profileProvesOwnership(profile({ name: `이혁성 ${code}`, location: "Seoul" }), code),
+      profileProvesOwnership(profile({ name: `홍길동 ${code}`, location: "Seoul" }), code),
     ).toBe(true);
   });
 
@@ -50,7 +50,7 @@ describe("proving the account is yours", () => {
   });
 
   it("refuses a profile without the code", () => {
-    expect(profileProvesOwnership(profile({ name: "이혁성", location: "Seoul" }), code)).toBe(
+    expect(profileProvesOwnership(profile({ name: "홍길동", location: "Seoul" }), code)).toBe(
       false,
     );
   });

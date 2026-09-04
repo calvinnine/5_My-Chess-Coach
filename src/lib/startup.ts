@@ -13,8 +13,20 @@ import { recoverStaleJobs } from "@/lib/analysis/job";
  */
 export async function runStartupTasks() {
   try {
-    const { ran } = await runMigrations(resolveLocation());
-    if (ran.length > 0) console.log(`[chess-coach] 마이그레이션 ${ran.length}건 적용`);
+    const { ran, sourceAvailable } = await runMigrations(resolveLocation());
+    if (!sourceAvailable) {
+      /*
+       * A deployed function bundle does not carry the `drizzle` directory, so
+       * there is nothing to apply here — the build step owns migrations for a
+       * deployment (`postbuild`). Saying so beats reporting "0 applied", which
+       * reads identically to "already up to date".
+       */
+      console.log(
+        "[chess-coach] 마이그레이션 파일이 없어 건너뜁니다 (배포에서는 빌드 단계가 적용합니다).",
+      );
+    } else if (ran.length > 0) {
+      console.log(`[chess-coach] 마이그레이션 ${ran.length}건 적용`);
+    }
   } catch (err) {
     console.error("[chess-coach] 마이그레이션 실패:", err);
     return;

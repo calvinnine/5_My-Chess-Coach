@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3117",
     "build": "next build",
+    "postbuild": "tsx scripts/migrate.ts",
     "start": "next start -p 3117",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

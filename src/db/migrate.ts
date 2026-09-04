@@ -6,6 +6,11 @@ import { resolveLocation, type DbLocation } from "./location";
 /**
  * Applies every drizzle-kit SQL file in order and records what ran.
  * Safe to call repeatedly; each file is applied at most once.
+ *
+ * `sourceAvailable` says whether the migration files were there to read at
+ * all. A deployed serverless bundle does not carry the `drizzle` directory, so
+ * without this the caller cannot tell "already up to date" from "there was
+ * nothing to look at" — and the schema silently stays behind.
  */
 export async function runMigrations(
   location: DbLocation = resolveLocation(),
@@ -37,7 +42,8 @@ export async function runMigrations(
     );
 
     const dir = path.resolve(migrationsDir);
-    const files = fs.existsSync(dir)
+    const sourceAvailable = fs.existsSync(dir);
+    const files = sourceAvailable
       ? fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()
       : [];
 
@@ -70,7 +76,7 @@ export async function runMigrations(
       ran.push(file);
     }
 
-    return { ran, total: files.length };
+    return { ran, total: files.length, sourceAvailable };
   } finally {
     client.close();
   }

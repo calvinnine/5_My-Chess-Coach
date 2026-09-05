@@ -18,6 +18,11 @@ interface SettingsResponse {
   presets: Record<string, { depth: number; keyMomentDepth: number; multiPv: number }>;
 }
 
+/** `location` and `tables` are withheld on a deployment; only `remote` is always there. */
+interface HealthResponse {
+  database: { remote: boolean; location?: string; tables?: string[] };
+}
+
 interface BackupsResponse {
   directory: string;
   backups: Array<{ file: string; sizeBytes: number; createdAt: number }>;
@@ -30,16 +35,24 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [stockfishPath, setStockfishPath] = useState("");
-  const [health, setHealth] = useState<{ database: { path: string; tables: string[] } } | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [settings, playerList, backupList, healthRes] = await Promise.all([
+      const [settings, playerList, healthRes] = await Promise.all([
         apiGet<SettingsResponse>("/api/settings"),
         apiGet<{ players: PlayerSummary[] }>("/api/players"),
-        apiGet<BackupsResponse>("/api/backup"),
-        apiGet<{ database: { path: string; tables: string[] } }>("/api/health"),
+        apiGet<HealthResponse>("/api/health"),
       ]);
+      /*
+       * Backups are a local-only feature — a hosted deployment answers 409,
+       * since a file written there disappears with the instance. Fetching it
+       * alongside the rest would fail the whole screen for a section that is
+       * simply not available.
+       */
+      const backupList = await apiGet<BackupsResponse>("/api/backup").catch(() => null);
       setData(settings);
       setPlayers(playerList.players);
       setBackups(backupList);
@@ -202,22 +215,33 @@ export default function SettingsPage() {
         )}
       </Card>
 
-      <Card title="데이터 관리" hint={health ? `데이터베이스: ${health.database.path}` : undefined}>
+      <Card
+        title="데이터 관리"
+        hint={
+          health
+            ? health.database.remote
+              ? "데이터베이스: 호스팅"
+              : `데이터베이스: ${health.database.location ?? "로컬 파일"}`
+            : undefined
+        }
+      >
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const res = await apiSend<{ file: string }>("/api/backup", "POST");
-                setNote(`백업을 만들었습니다: ${res.file}`);
-                setBackups(await apiGet<BackupsResponse>("/api/backup"));
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "백업에 실패했습니다.");
-              }
-            }}
-          >
-            지금 백업
-          </Button>
+          {backups && (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const res = await apiSend<{ file: string }>("/api/backup", "POST");
+                  setNote(`백업을 만들었습니다: ${res.file}`);
+                  setBackups(await apiGet<BackupsResponse>("/api/backup"));
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "백업에 실패했습니다.");
+                }
+              }}
+            >
+              지금 백업
+            </Button>
+          )}
           <a
             href={activePlayerId ? `/api/export/pgn?playerId=${activePlayerId}` : "/api/export/pgn"}
             className="rounded-lg border border-line-strong px-3.5 py-2 text-sm hover:bg-surface-sunken"
@@ -255,6 +279,50 @@ export default function SettingsPage() {
             </p>
           </div>
         )}
+      </Card>
+
+      <Card title="계정 삭제" hint="되돌릴 수 없습니다.">
+        <p className="text-sm leading-relaxed text-ink-soft">
+          대국, 분석, <strong className="font-medium text-ink">복기 메모</strong>, 퍼즐 기록,
+          로그인 정보가 모두 지워집니다. 복구할 수 없으니 남기고 싶은 것이 있다면 위에서
+          먼저 내려받으세요. 원본 대국 기록은 Chess.com에 그대로 남습니다.
+        </p>
+        <p className="mt-3 text-sm text-ink-soft">
+          확인을 위해 Chess.com 사용자명을 입력해 주세요.
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <input
+            value={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.value)}
+            placeholder="사용자명"
+            autoComplete="off"
+            className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm outline-none focus:border-loss"
+          />
+          <Button
+            variant="danger"
+            disabled={!deleteConfirm.trim() || deleting}
+            onClick={async () => {
+              setError(null);
+              setDeleting(true);
+              try {
+                await apiSend("/api/account", "DELETE", {
+                  confirmUsername: deleteConfirm.trim(),
+                });
+                /*
+                 * A full reload, not a router push: the account and its session
+                 * are gone, and every screen still holds data from it in memory.
+                 */
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = "/dashboard";
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "삭제하지 못했습니다.");
+                setDeleting(false);
+              }
+            }}
+          >
+            {deleting ? "삭제 중…" : "영구 삭제"}
+          </Button>
+        </div>
       </Card>
 
       <Card title="AI 설명 계층" hint="선택 기능 · 아직 켜져 있지 않습니다.">

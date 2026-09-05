@@ -130,3 +130,44 @@ test("exports return the stored PGN and analysis", async ({ request }) => {
   expect(json.games.length).toBeGreaterThan(0);
   expect(json).toHaveProperty("moveAnalyses");
 });
+
+/*
+ * Deletion runs last: it empties the database the other tests rely on, and it
+ * is the one action with no undo — worth exercising against the real server
+ * rather than trusting the cascade in isolation.
+ */
+test("deleting the account removes the games, notes and analysis", async ({ request }) => {
+  const players = await (await request.get("/api/players")).json();
+  const player = players.players[0];
+
+  // Leave something private behind, so the check is not only about games.
+  const games = await (await request.get(`/api/games?playerId=${player.id}`)).json();
+  const gameId = games.games[0].id;
+  const saved = await request.put(`/api/games/${gameId}/notes`, {
+    data: { userThoughts: "지워져야 하는 비공개 메모" },
+  });
+  expect(saved.ok()).toBe(true);
+
+  const wrongName = await request.delete("/api/account", {
+    data: { confirmUsername: "someone-else" },
+  });
+  expect(wrongName.status()).toBe(400);
+  // The mistyped attempt must not have deleted anything.
+  expect((await (await request.get("/api/players")).json()).players.length).toBe(1);
+
+  const deleted = await request.delete("/api/account", {
+    data: { confirmUsername: player.username },
+  });
+  expect(deleted.ok()).toBe(true);
+  expect((await deleted.json()).games).toBeGreaterThan(0);
+
+  expect((await (await request.get("/api/players")).json()).players.length).toBe(0);
+
+  /*
+   * With the account gone there is nobody to answer for, so the routes that
+   * serve a player's data have nothing to serve. That they refuse rather than
+   * return an empty document is the point: no account, no data.
+   */
+  expect((await request.get("/api/export/analysis")).status()).toBe(401);
+  expect((await request.get(`/api/games/${gameId}`)).status()).toBe(401);
+});

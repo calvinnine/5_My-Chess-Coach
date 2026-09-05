@@ -1,6 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { games, playerRatings, players, syncCache } from "@/db/schema";
 import { openingFamily, openingNameFromEcoUrl, parsePgn, PgnParseError } from "@/lib/pgn/parse";
@@ -204,6 +204,8 @@ export async function syncPlayerGames(
     lastSyncedMonth: player.lastSyncedMonth,
   });
 
+  let newestSynced = player.lastSyncedMonth;
+
   for (const archiveUrl of targets) {
     if (options.signal?.aborted) break;
     if (options.maxNewGames && summary.inserted >= options.maxNewGames) break;
@@ -231,25 +233,45 @@ export async function syncPlayerGames(
     summary.monthsChecked.push(key);
     summary.rejectedBySchema += monthly.rejected;
 
+    /*
+     * The month is stored in bulk: one dedupe query and a handful of inserts,
+     * rather than two round trips per game. Building the rows is pure CPU, so
+     * it all happens before anything is written.
+     */
+    const built = monthly.games.map((game) => buildGameRow(player.id, normalized, game));
+    const candidates = built.filter(
+      (b): b is Extract<BuiltGame, { row: unknown }> => b.outcome !== "invalid",
+    );
+
+    const alreadyStored = await existingUrls(candidates.map((c) => c.externalUrl));
+    const seen = new Set<string>();
+    const fresh = candidates.filter((c) => {
+      // A response can repeat a game; the unique index would reject the batch.
+      if (alreadyStored.has(c.externalUrl) || seen.has(c.externalUrl)) return false;
+      seen.add(c.externalUrl);
+      return true;
+    });
+    summary.duplicates += candidates.length - fresh.length;
+
+    const room = options.maxNewGames
+      ? Math.max(0, options.maxNewGames - summary.inserted)
+      : fresh.length;
+    const truncated = fresh.length > room;
+    const toStore = truncated ? fresh.slice(0, room) : fresh;
+
+    for (let i = 0; i < toStore.length; i += INSERT_CHUNK) {
+      await db.insert(games).values(toStore.slice(i, i + INSERT_CHUNK).map((c) => c.row));
+    }
+
     let insertedThisMonth = 0;
-    let truncated = false;
-    for (const game of monthly.games) {
-      if (options.maxNewGames && summary.inserted >= options.maxNewGames) {
-        truncated = true;
-        break;
-      }
-      const outcome = await storeGame(player.id, normalized, game);
-      if (outcome === "inserted") {
+    for (const stored of toStore) {
+      if (stored.outcome === "variant") summary.skippedVariants++;
+      else if (stored.outcome === "no_moves") summary.abortedGames++;
+      else if (stored.outcome === "practice") summary.practiceGames++;
+      else {
         summary.inserted++;
         insertedThisMonth++;
-      } else if (outcome === "duplicate") summary.duplicates++;
-      else if (outcome === "variant") summary.skippedVariants++;
-      else if (outcome === "no_moves") summary.abortedGames++;
-      else if (outcome === "practice") summary.practiceGames++;
-      else if (outcome === "parse_failed") {
-        summary.inserted++;
-        summary.parseFailures++;
-        insertedThisMonth++;
+        if (stored.outcome === "parse_failed") summary.parseFailures++;
       }
     }
 
@@ -266,10 +288,18 @@ export async function syncPlayerGames(
      */
     if (!truncated) {
       await client.commitCache(monthly.url, monthly.cacheHeaders);
-      await db
-        .update(players)
-        .set({ lastSyncedMonth: key, lastSyncedAt: Math.floor(Date.now() / 1000) })
-        .where(eq(players.id, player.id));
+      /*
+       * Only ever forward. A backfill walks from the oldest month, and writing
+       * its key here would move the marker *backwards* — every routine sync
+       * afterwards would re-request every month in between.
+       */
+      if (!newestSynced || key > newestSynced) {
+        newestSynced = key;
+        await db
+          .update(players)
+          .set({ lastSyncedMonth: key, lastSyncedAt: Math.floor(Date.now() / 1000) })
+          .where(eq(players.id, player.id));
+      }
     }
   }
 
@@ -290,16 +320,32 @@ type StoreOutcome =
   | "practice"
   | "invalid";
 
-async function storeGame(
+/**
+ * A game turned into a row, without touching the database.
+ *
+ * Splitting the build from the write is what lets a month be stored in a
+ * couple of round trips instead of two per game. With the database in another
+ * region that difference is the whole budget: a backfill of ~600 games was
+ * spending minutes on latency alone and being killed by the function timeout.
+ */
+type BuiltGame =
+  | { outcome: "invalid" }
+  | {
+      outcome: Exclude<StoreOutcome, "invalid" | "duplicate">;
+      externalUrl: string;
+      row: typeof games.$inferInsert;
+    };
+
+function buildGameRow(
   playerId: number,
   username: string,
   game: ChessComGame,
-): Promise<StoreOutcome> {
-  if (!game.pgn) return "invalid";
+): BuiltGame {
+  if (!game.pgn) return { outcome: "invalid" };
 
   const isWhite = game.white.username.toLowerCase() === username;
   const isBlack = game.black.username.toLowerCase() === username;
-  if (!isWhite && !isBlack) return "invalid";
+  if (!isWhite && !isBlack) return { outcome: "invalid" };
 
   const playerColor = isWhite ? "white" : "black";
   const side = isWhite ? game.white : game.black;
@@ -308,13 +354,6 @@ async function storeGame(
   // URL is the dedupe key; only hash the PGN when there is no URL at all.
   const externalUrl =
     game.url ?? `pgnhash:${crypto.createHash("sha1").update(game.pgn).digest("hex")}`;
-
-  const [existing] = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(eq(games.externalUrl, externalUrl))
-    .limit(1);
-  if (existing) return "duplicate";
 
   const rules = game.rules ?? "chess";
   const isStandard = rules === "chess";
@@ -341,7 +380,7 @@ async function storeGame(
 
   const accuracy = isWhite ? game.accuracies?.white : game.accuracies?.black;
 
-  await db.insert(games).values({
+  const row = {
     externalUrl,
     playerId,
     playedAt: game.end_time ?? Math.floor(Date.now() / 1000),
@@ -372,12 +411,38 @@ async function storeGame(
       ? parseError
       : "코치·봇 연습 게임은 분석 대상에서 제외합니다.",
     parseError,
-  });
+  } satisfies typeof games.$inferInsert;
 
-  if (!isStandard) return "variant";
-  if (!isHuman) return "practice";
-  if (noMoves) return "no_moves";
-  return parseError ? "parse_failed" : "inserted";
+  const outcome: StoreOutcome = !isStandard
+    ? "variant"
+    : !isHuman
+      ? "practice"
+      : noMoves
+        ? "no_moves"
+        : parseError
+          ? "parse_failed"
+          : "inserted";
+
+  return { outcome, externalUrl, row };
+}
+
+/** How many url placeholders one dedupe query carries. */
+const DEDUPE_CHUNK = 200;
+
+/** How many rows one insert statement carries. */
+const INSERT_CHUNK = 100;
+
+/** Which of these games are already stored, asked once instead of once each. */
+async function existingUrls(urls: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < urls.length; i += DEDUPE_CHUNK) {
+    const rows = await db
+      .select({ externalUrl: games.externalUrl })
+      .from(games)
+      .where(inArray(games.externalUrl, urls.slice(i, i + DEDUPE_CHUNK)));
+    for (const row of rows) found.add(row.externalUrl);
+  }
+  return found;
 }
 
 

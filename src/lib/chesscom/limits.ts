@@ -13,8 +13,13 @@ import { players, syncLeases } from "@/db/schema";
  */
 const LEASE_ID = 1;
 
-/** Long enough for a slow sync, short enough that a crash is not fatal. */
-const LEASE_TTL_SECONDS = 180;
+/**
+ * Must outlast the longest a sync can run, which is the function's own limit
+ * (`maxDuration` on the sync route). A shorter lease expires while its holder
+ * is still working, and a second sync can then start alongside it — the one
+ * thing the lease exists to prevent.
+ */
+const LEASE_TTL_SECONDS = 330;
 
 /** How long a player must wait before syncing again. */
 export const SYNC_COOLDOWN_SECONDS = 60;

@@ -63,7 +63,9 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
     abort.current = controller;
     try {
       const { analyzeGamesInBrowser } = await import("@/lib/analysis/browser-batch");
-      const { browserEngineSupported } = await import("@/lib/analysis/browser");
+      const { browserEngineSupported, loadAnalysisPreset } = await import(
+        "@/lib/analysis/browser"
+      );
       if (!browserEngineSupported()) {
         throw new Error("이 브라우저에서는 분석 엔진을 실행할 수 없습니다.");
       }
@@ -78,6 +80,7 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
       }
 
       const result = await analyzeGamesInBrowser(ids, {
+        preset: await loadAnalysisPreset(),
         signal: controller.signal,
         onProgress: (p) =>
           setProgress({
@@ -138,7 +141,9 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
         <p className="text-sm leading-relaxed text-ink-soft">
           체스 엔진이 <strong className="font-medium text-ink">이 브라우저 안에서</strong>{" "}
           돌아갑니다. 대국 기록이 분석을 위해 다른 곳으로 가지 않고, 창을 열어두셔야 진행됩니다.
-          한 판에 30초에서 1분쯤 걸립니다.
+          기본 설정(표준)에서 <strong className="font-medium text-ink">한 판에 4~5분</strong>{" "}
+          걸리니 10판이면 시간이 꽤 듭니다. 설정에서 분석 강도를 &quot;빠름&quot;으로 바꾸면
+          한 판 40초 정도로 줄어듭니다.
         </p>
 
         {progress && (

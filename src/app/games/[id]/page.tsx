@@ -170,7 +170,7 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
   async function analyzeHere() {
     if (!data) return;
     // Kept out of the initial bundle: it pulls in the worker plumbing.
-    const { analyzeInBrowser, browserEngineSupported } = await import(
+    const { analyzeInBrowser, browserEngineSupported, loadAnalysisPreset } = await import(
       "@/lib/analysis/browser"
     );
     if (!browserEngineSupported()) {
@@ -179,6 +179,7 @@ export default function GameReviewPage({ params }: { params: Promise<{ id: strin
 
     setLocalProgress({ done: 0, total: 0 });
     const result = await analyzeInBrowser(data.game.pgn, playerColor as "white" | "black", {
+      preset: await loadAnalysisPreset(),
       onProgress: (p) => setLocalProgress({ done: p.done, total: p.total }),
     });
 

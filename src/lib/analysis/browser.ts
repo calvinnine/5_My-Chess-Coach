@@ -1,6 +1,7 @@
 "use client";
 
 import { createBrowserEngine } from "@/lib/engine/wasm";
+import { apiGet } from "@/lib/client-api";
 import {
   analyzeGame,
   PRESETS,
@@ -13,6 +14,25 @@ import type { Color } from "./eval";
 const ENGINE_URL = "/engine/stockfish-18-lite-single.js";
 
 export type BrowserPreset = "fast" | "standard" | "precise";
+
+const PRESET_NAMES: BrowserPreset[] = ["fast", "standard", "precise"];
+
+/**
+ * The analysis strength the visitor chose in settings.
+ *
+ * Every browser-side caller used to hard-code "standard", which made the
+ * setting decorative — and on a deployment, where the browser is the only
+ * engine, it was the only control over how long an analysis takes.
+ */
+export async function loadAnalysisPreset(): Promise<BrowserPreset> {
+  try {
+    const res = await apiGet<{ settings: Record<string, string> }>("/api/settings");
+    const stored = res.settings.analysis_preset as BrowserPreset | undefined;
+    return stored && PRESET_NAMES.includes(stored) ? stored : "standard";
+  } catch {
+    return "standard";
+  }
+}
 
 export interface BrowserAnalysisResult {
   engineVersion: string;

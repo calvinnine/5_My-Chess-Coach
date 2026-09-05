@@ -87,7 +87,9 @@ export default function AnalysisBar({
     setLocalRun({ done: 0, total: 0, label: "" });
     try {
       const { analyzeGamesInBrowser } = await import("@/lib/analysis/browser-batch");
-      const { browserEngineSupported } = await import("@/lib/analysis/browser");
+      const { browserEngineSupported, loadAnalysisPreset } = await import(
+        "@/lib/analysis/browser"
+      );
       if (!browserEngineSupported()) {
         throw new Error("이 브라우저에서는 분석 엔진을 실행할 수 없습니다.");
       }
@@ -99,6 +101,7 @@ export default function AnalysisBar({
       if (ids.length === 0) return;
 
       const result = await analyzeGamesInBrowser(ids, {
+        preset: await loadAnalysisPreset(),
         signal: controller.signal,
         onProgress: (p) =>
           setLocalRun({ done: p.done, total: p.total, label: p.currentLabel ?? "" }),

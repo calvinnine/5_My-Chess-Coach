@@ -131,7 +131,10 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="분석 강도" hint="깊이 숫자는 절대적인 기준이 아니라 설정값입니다. 모든 분석 결과에 사용한 설정이 함께 기록됩니다.">
+      <Card
+        title="분석 강도"
+        hint="서버에 엔진이 없으면 분석이 이 브라우저에서 돌아갑니다. 아래 시간은 40수 안팎의 한 판을 기준으로 실제로 측정한 값입니다."
+      >
         <div className="grid gap-2 sm:grid-cols-3">
           {Object.entries(data.presets).map(([id, cfg]) => (
             <button
@@ -147,6 +150,13 @@ export default function SettingsPage() {
               </div>
               <div className="text-[11px] text-ink-faint">
                 depth {cfg.depth} · 핵심 장면 {cfg.keyMomentDepth} · MultiPV {cfg.multiPv}
+              </div>
+              <div className="mt-0.5 text-[11px] text-ink-faint">
+                {id === "fast"
+                  ? "브라우저에서 한 판 약 40초"
+                  : id === "standard"
+                    ? "브라우저에서 한 판 4~5분"
+                    : "브라우저에서 한 판 15분 이상"}
               </div>
             </button>
           ))}

@@ -73,9 +73,9 @@ export default function Onboarding({ onDone }: { onDone: (playerId: number) => v
         <div className="grid gap-2 sm:grid-cols-3">
           {(
             [
-              { id: "fast", name: "빠름", detail: "depth 12 · 저사양" },
-              { id: "standard", name: "표준", detail: "depth 16 · 권장" },
-              { id: "precise", name: "정밀", detail: "depth 20 · 느림" },
+              { id: "fast", name: "빠름", detail: "depth 12 · 브라우저 한 판 40초" },
+              { id: "standard", name: "표준", detail: "depth 16 · 브라우저 한 판 4~5분" },
+              { id: "precise", name: "정밀", detail: "depth 20 · 훨씬 느림" },
             ] as const
           ).map((option) => (
             <button

@@ -5,6 +5,12 @@ import { analyzeGame, PRESETS, type AnalysisSettings } from "../src/lib/analysis
 import { UciEngine } from "../src/lib/engine/uci";
 import { locateEngine } from "../src/lib/engine/locate";
 import type { Color } from "../src/lib/analysis/eval";
+import {
+  fetchAllRemoteGames,
+  planUpload,
+  PAGE_SIZE,
+  type RemoteGame,
+} from "../src/lib/analysis/upload-targets";
 
 /**
  * Analyses games with the local Stockfish binary and uploads the results to a
@@ -142,13 +148,17 @@ async function main() {
 
   /*
    * Ids differ between the two databases, so games are matched on the Chess.com
-   * URL — the same key the sync uses to avoid duplicates.
+   * URL — the same key the sync uses to avoid duplicates. The list is read page
+   * by page: one request tops out at 500 games, and an account past that would
+   * otherwise have its older games quietly treated as absent.
    */
-  const remote = await session.json<{
-    games: Array<{ id: number; externalUrl: string; analysisStatus: string }>;
-  }>("/api/games?limit=500");
-  const remoteByUrl = new Map(remote.games.map((g) => [g.externalUrl, g]));
-  console.log(`  배포본에 ${remote.games.length}판이 있습니다.`);
+  const remoteByUrl = await fetchAllRemoteGames(async ({ limit, to }) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (to !== undefined) query.set("to", String(to));
+    const body = await session.json<{ games: RemoteGame[] }>(`/api/games?${query}`);
+    return body.games;
+  }, PAGE_SIZE);
+  console.log(`  배포본에 ${remoteByUrl.size}판이 있습니다.`);
 
   const localGames = (
     await local.execute(`
@@ -157,12 +167,18 @@ async function main() {
       ORDER BY played_at DESC`)
   ).rows as unknown as Array<{ externalUrl: string; pgn: string; playerColor: string }>;
 
-  const targets = localGames
-    .map((g) => ({ ...g, remote: remoteByUrl.get(g.externalUrl) }))
-    .filter((g) => g.remote && g.remote.analysisStatus !== "completed")
-    .slice(0, args.limit);
+  const plan = planUpload(localGames, remoteByUrl, args.limit);
+  const targets = plan.targets;
 
-  console.log(`  올릴 대상: ${targets.length}판 (배포본에 있고 아직 미분석)\n`);
+  console.log(`  로컬에 ${localGames.length}판, 그중 배포본에 이미 분석된 것 ${plan.alreadyDone}판.`);
+  if (plan.missing > 0) {
+    console.log(
+      `  배포본에 없는 대국 ${plan.missing}판은 건너뜁니다. ` +
+        `대시보드에서 "지난 대국 더 가져오기"로 먼저 동기화하세요.`,
+    );
+  }
+  console.log(`  올릴 대상: ${targets.length}판` + (plan.remaining > 0 ? ` (남는 ${plan.remaining}판은 다음 실행에서)` : ""));
+  console.log("");
   if (targets.length === 0 || args.dryRun) {
     local.close();
     return;
@@ -185,7 +201,7 @@ async function main() {
           uci,
           settings,
         );
-        await session.json(`/api/games/${game.remote!.id}/analysis`, {
+        await session.json(`/api/games/${game.remote.id}/analysis`, {
           method: "POST",
           body: JSON.stringify({
             engineVersion: result.engineVersion,

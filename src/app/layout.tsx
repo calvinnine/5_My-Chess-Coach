@@ -39,9 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-5 pb-10 text-xs text-ink-faint">
+        <footer className="mx-auto max-w-6xl px-5 pb-10 text-center text-xs text-ink-faint">
           <p>Chess.com 공개 API만 사용하며 비밀번호는 요청하지도, 저장하지도 않습니다.</p>
-          <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          <p className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1">
             <Link href="/privacy" className="hover:text-ink-soft hover:underline">
               개인정보 처리방침
             </Link>

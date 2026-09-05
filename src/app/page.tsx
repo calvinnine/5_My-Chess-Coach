@@ -84,11 +84,23 @@ export default function LandingPage() {
           방문자의 브라우저에서</strong> 실행됩니다. 대국이 분석을 위해 다른 곳으로 가지
           않는다는 뜻이지만, 그만큼 시간이 걸립니다.
         </p>
+        <p className="text-sm leading-relaxed text-ink-soft">
+          얼마나 걸릴지는 <strong className="font-medium text-ink">직접 고르실 수
+          있습니다</strong>. 아래 셋 중 하나를{" "}
+          {signedIn ? (
+            <Link href="/settings" className="text-accent hover:underline">
+              설정 → 분석 강도
+            </Link>
+          ) : (
+            <strong className="font-medium text-ink">설정 → 분석 강도</strong>
+          )}
+          에서 선택합니다. 처음에는 &quot;표준&quot;으로 시작합니다.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-faint">
-                <th className="py-1.5 pr-4 font-medium">분석 강도</th>
+                <th className="py-1.5 pr-4 font-medium">분석 강도 (설정에서 선택)</th>
                 <th className="py-1.5 pr-4 font-medium">한 판</th>
                 <th className="py-1.5 font-medium">쓰임</th>
               </tr>
@@ -113,9 +125,10 @@ export default function LandingPage() {
           </table>
         </div>
         <p className="text-xs leading-relaxed text-ink-faint">
-          40수 안팎의 한 판을 실제로 측정한 값입니다. 설정에서 언제든 바꿀 수 있고,
-          분석하는 동안 창을 열어 두어야 합니다. 끝난 판은 저장되므로 중간에 멈춰도
-          다시 하지 않아도 됩니다. 수백 판을 한 번에 분석하는 용도로는 맞지 않습니다.
+          40수 안팎의 한 판을 실제로 측정한 값입니다. 언제든 바꿀 수 있고, 바꾼 뒤
+          분석하는 판부터 적용됩니다. 분석하는 동안 창을 열어 두어야 하지만, 끝난 판은
+          저장되므로 중간에 멈춰도 다시 하지 않아도 됩니다. 수백 판을 한 번에 분석하는
+          용도로는 맞지 않습니다.
         </p>
       </section>
 

@@ -28,16 +28,24 @@ export interface BrowserAnalysisResult {
  * function derives locally is what ends up being saved — see
  * `api/games/[id]/analysis`.
  */
-export async function analyzeInBrowser(
-  pgn: string,
-  playerColor: Color,
-  options: {
-    preset?: BrowserPreset;
-    signal?: AbortSignal;
-    onProgress?: (p: AnalyzeProgress) => void;
-  } = {},
-): Promise<BrowserAnalysisResult> {
-  const preset = options.preset ?? "standard";
+export interface BrowserAnalyzer {
+  analyze(
+    pgn: string,
+    playerColor: Color,
+    options?: { signal?: AbortSignal; onProgress?: (p: AnalyzeProgress) => void },
+  ): Promise<BrowserAnalysisResult>;
+  dispose(): Promise<void>;
+}
+
+/**
+ * Starts the engine once and keeps it for several games.
+ *
+ * Standing it up costs a 7MB WebAssembly instantiation, so a run over ten
+ * games must not pay that ten times.
+ */
+export async function createBrowserAnalyzer(
+  preset: BrowserPreset = "standard",
+): Promise<BrowserAnalyzer> {
   /*
    * The shipped build is single-threaded: the multi-threaded ones need
    * cross-origin isolation for SharedArrayBuffer, which would constrain every
@@ -49,20 +57,39 @@ export async function analyzeInBrowser(
     multiPv: PRESETS[preset].multiPv,
     supportsThreads: false,
   });
+  await engine.start();
 
+  return {
+    async analyze(pgn, playerColor, options = {}) {
+      const result = await analyzeGame(pgn, playerColor, engine, PRESETS[preset], {
+        signal: options.signal,
+        onProgress: options.onProgress,
+      });
+      return {
+        engineVersion: result.engineVersion,
+        preset,
+        evaluations: result.evaluations,
+      };
+    },
+    dispose: () => engine.stop(),
+  };
+}
+
+/** One game, engine started and stopped around it. */
+export async function analyzeInBrowser(
+  pgn: string,
+  playerColor: Color,
+  options: {
+    preset?: BrowserPreset;
+    signal?: AbortSignal;
+    onProgress?: (p: AnalyzeProgress) => void;
+  } = {},
+): Promise<BrowserAnalysisResult> {
+  const analyzer = await createBrowserAnalyzer(options.preset ?? "standard");
   try {
-    await engine.start();
-    const result = await analyzeGame(pgn, playerColor, engine, PRESETS[preset], {
-      signal: options.signal,
-      onProgress: options.onProgress,
-    });
-    return {
-      engineVersion: result.engineVersion,
-      preset,
-      evaluations: result.evaluations,
-    };
+    return await analyzer.analyze(pgn, playerColor, options);
   } finally {
-    await engine.stop();
+    await analyzer.dispose();
   }
 }
 

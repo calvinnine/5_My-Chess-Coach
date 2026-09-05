@@ -5,9 +5,19 @@ import { apiGet, apiSend } from "@/lib/client-api";
 import type { AnalysisStatusResponse } from "@/types/api";
 import { Button, ErrorNote } from "./ui";
 
+interface LocalRun {
+  done: number;
+  total: number;
+  label: string;
+}
+
 /**
- * Live progress for the batch analyser. Polls only while a job is running so an
- * idle app makes no requests.
+ * Live progress for the batch analyser.
+ *
+ * Two ways to run: a server-side job when a Stockfish binary exists, and this
+ * browser otherwise. A deployment has no binary, so without the second the
+ * button here would answer "Stockfish 실행 파일을 찾지 못했습니다" — true of the
+ * server, and useless to someone using the website.
  */
 export default function AnalysisBar({
   playerId,
@@ -18,7 +28,11 @@ export default function AnalysisBar({
 }) {
   const [status, setStatus] = useState<AnalysisStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** null until known; false means the analysis has to run in this browser. */
+  const [serverEngine, setServerEngine] = useState<boolean | null>(null);
+  const [localRun, setLocalRun] = useState<LocalRun | null>(null);
   const wasRunning = useRef(false);
+  const abort = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,17 +53,66 @@ export default function AnalysisBar({
     return () => clearInterval(id);
   }, [refresh]);
 
+  useEffect(() => {
+    apiGet<{ engine: { found: boolean } }>("/api/health")
+      .then((res) => setServerEngine(res.engine.found))
+      .catch(() => setServerEngine(false));
+  }, []);
+
   const job = status?.job;
   const pending = status?.queue?.pending ?? 0;
 
   async function start() {
     setError(null);
+    if (serverEngine) {
+      try {
+        await apiSend("/api/analyze-batch", "POST", {
+          playerId: playerId ?? undefined,
+          limit: 10,
+        });
+        wasRunning.current = true;
+        void refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "분석을 시작하지 못했습니다.");
+      }
+      return;
+    }
+    await startHere();
+  }
+
+  /** Runs the engine in this browser and uploads each result as it finishes. */
+  async function startHere() {
+    const controller = new AbortController();
+    abort.current = controller;
+    setLocalRun({ done: 0, total: 0, label: "" });
     try {
-      await apiSend("/api/analyze-batch", "POST", { playerId: playerId ?? undefined, limit: 10 });
-      wasRunning.current = true;
+      const { analyzeGamesInBrowser } = await import("@/lib/analysis/browser-batch");
+      const { browserEngineSupported } = await import("@/lib/analysis/browser");
+      if (!browserEngineSupported()) {
+        throw new Error("이 브라우저에서는 분석 엔진을 실행할 수 없습니다.");
+      }
+
+      const list = await apiGet<{ games: Array<{ id: number }> }>(
+        "/api/games?analysis=unanalyzed&opponent=human&limit=10",
+      );
+      const ids = list.games.map((g) => g.id);
+      if (ids.length === 0) return;
+
+      const result = await analyzeGamesInBrowser(ids, {
+        signal: controller.signal,
+        onProgress: (p) =>
+          setLocalRun({ done: p.done, total: p.total, label: p.currentLabel ?? "" }),
+      });
+      if (result.failed > 0) {
+        setError(`${result.failed}판은 분석에 실패해 건너뛰었습니다.`);
+      }
+      onFinished?.();
       void refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "분석을 시작하지 못했습니다.");
+      setError(err instanceof Error ? err.message : "분석에 실패했습니다.");
+    } finally {
+      setLocalRun(null);
+      abort.current = null;
     }
   }
 
@@ -63,6 +126,32 @@ export default function AnalysisBar({
   }
 
   if (!job) return null;
+
+  if (localRun) {
+    const localPercent = Math.round((localRun.done / Math.max(1, localRun.total)) * 100);
+    return (
+      <div className="rounded-xl border border-line bg-surface px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span>
+            이 브라우저에서 분석 중 · {localRun.done}/{localRun.total}판
+            {localRun.label && ` (${localRun.label})`}
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => abort.current?.abort()}>
+            중지
+          </Button>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
+          <div
+            className="h-full rounded-full bg-gold transition-[width]"
+            style={{ width: `${localPercent}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[11px] text-ink-faint">
+          창을 닫으면 중단됩니다. 끝난 판은 저장되어 있습니다.
+        </p>
+      </div>
+    );
+  }
 
   const percent =
     job.positionsTotal > 0 ? Math.round((job.positionsDone / job.positionsTotal) * 100) : 0;
@@ -99,8 +188,12 @@ export default function AnalysisBar({
               : "대기 중인 미분석 게임이 없습니다."}
             {job.failed > 0 ? ` 직전 작업에서 ${job.failed}판이 실패했습니다.` : ""}
           </p>
-          <Button size="sm" onClick={() => void start()} disabled={pending === 0}>
-            미분석 10판 분석
+          <Button
+            size="sm"
+            onClick={() => void start()}
+            disabled={pending === 0 || serverEngine === null}
+          >
+            {serverEngine === false ? "이 브라우저에서 10판 분석" : "미분석 10판 분석"}
           </Button>
         </div>
       )}

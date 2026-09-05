@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AnalysisBar from "@/components/AnalysisBar";
+import GettingStarted from "@/components/GettingStarted";
 import Onboarding from "@/components/Onboarding";
 import SignIn from "@/components/SignIn";
 import PatternCard from "@/components/PatternCard";
@@ -148,6 +149,23 @@ export default function DashboardPage() {
   }
 
   if (!data) return <Spinner label="대시보드를 계산하는 중" />;
+
+  /*
+   * The dashboard is built for someone with a few hundred games. With nothing
+   * analysed it is a dozen sections reading "아직 없습니다", and the one useful
+   * instruction is buried at the bottom — so until there is something to show,
+   * show what to do instead.
+   */
+  if (data.analyzedGames === 0) {
+    return (
+      <GettingStarted
+        username={data.username}
+        totalGames={data.totalGames}
+        pendingGames={data.pendingGames}
+        onDone={() => void load(data.playerId)}
+      />
+    );
+  }
 
   const rapid = data.ratings.find((r) => r.timeClass === "rapid") ?? data.ratings[0];
 

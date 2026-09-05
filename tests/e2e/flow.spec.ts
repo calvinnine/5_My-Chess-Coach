@@ -17,12 +17,17 @@ test("the app reports a healthy database and locates the engine", async ({ reque
   expect(body.database.tables).toContain("move_analyses");
 });
 
-test("dashboard holds back a diagnosis below the minimum sample", async ({ page }) => {
+test("with nothing analysed the dashboard offers a way to start", async ({ page }) => {
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "TestUser" })).toBeVisible();
-  // 6 seeded games, none analysed: the app must say it is still observing.
-  await expect(page.getByText("관찰 중")).toBeVisible();
-  await expect(page.getByText(/분석된 게임이 0판이라 개인 성향을 확정하지 않습니다/)).toBeVisible();
+  /*
+   * 6 seeded games, none analysed. The full dashboard here would be a dozen
+   * sections all saying "아직 없습니다", so what a newcomer gets is the next
+   * step instead — and no diagnosis, since there is nothing to diagnose.
+   */
+  await expect(page.getByRole("heading", { name: "시작하기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "1. 대국 가져오기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /미분석 \d+판 분석/ })).toBeVisible();
+  await expect(page.getByText("반복 약점")).toBeHidden();
 });
 
 test("game list filters and opens a game", async ({ page }) => {
@@ -68,6 +73,22 @@ test("analysing a game produces a review and the scenes are navigable", async ({
   await expect(page.getByText("시작 위치입니다.")).toBeVisible();
   await page.getByRole("button", { name: "→", exact: true }).click();
   await expect(page.getByText("시작 위치입니다.")).toBeHidden();
+});
+
+test("the dashboard appears once something is analysed, still without a diagnosis", async ({
+  page,
+}) => {
+  // One game analysed by the test above: enough to show, far short of a verdict.
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "TestUser" })).toBeVisible();
+  /*
+   * The banner sentence, not the bare words: "관찰 중" is also the status badge
+   * on every pattern card, so matching on it alone is ambiguous here.
+   */
+  await expect(
+    page.getByText(/분석된 게임이 1판이라 개인 성향을 확정하지 않습니다/),
+  ).toBeVisible();
+  await expect(page.getByText(/10판을 채우면 반복 약점 진단을 시작합니다/)).toBeVisible();
 });
 
 test("review notes persist across a reload", async ({ page }) => {

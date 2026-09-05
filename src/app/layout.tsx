@@ -50,6 +50,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <span>Chess.com이 만들거나 보증한 서비스가 아닙니다.</span>
           </p>
+          <p className="mt-3 border-t border-line pt-3">
+            만든 사람 ·{" "}
+            <a
+              href="https://github.com/calvinnine/5_My-Chess-Coach"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-ink-soft hover:text-ink hover:underline"
+            >
+              이혁성 (Lee Hyeokseong)
+            </a>
+          </p>
         </footer>
       </body>
     </html>

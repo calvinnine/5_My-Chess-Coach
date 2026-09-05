@@ -99,9 +99,9 @@ export default function EvalGraph({
         </ResponsiveContainer>
       </div>
       <p className="mt-1 text-[11px] text-ink-faint">
-        위쪽이 백에게 유리한 방향입니다. 형은 이 게임에서{" "}
+        위쪽이 백에게 유리한 방향입니다. 나는 이 게임에서{" "}
         {playerColor === "white" ? "백" : "흑"}이므로{" "}
-        {playerColor === "white" ? "위로" : "아래로"} 갈수록 형에게 좋습니다.
+        {playerColor === "white" ? "위로" : "아래로"} 갈수록 나에게 좋습니다.
       </p>
     </div>
   );

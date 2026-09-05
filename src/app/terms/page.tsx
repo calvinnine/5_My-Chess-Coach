@@ -10,7 +10,7 @@ export default function TermsPage() {
     <LegalPage title="이용약관" updated="2026-09-05">
       <Section heading="이 서비스가 하는 일">
         <p>
-          Chess.com에서 <strong className="font-medium text-ink">형 본인의</strong> 대국을
+          Chess.com에서 <strong className="font-medium text-ink">본인의</strong> 대국을
           가져와 분석하고, 반복되는 약점과 연습 방향을 한국어로 알려줍니다. 무료이고
           개인 프로젝트로 운영합니다.
         </p>

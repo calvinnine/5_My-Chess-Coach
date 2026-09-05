@@ -59,7 +59,7 @@ function PerspectiveSection({
             label={`${PHASE_LABEL[report.phase ?? ""] ?? "구간"} 평균 손실`}
             value={`${report.accuracy.averageLossCp}cp`}
           />
-          <Stat label="형이 둔 수" value={report.accuracy.plies.toLocaleString("ko-KR")} />
+          <Stat label="내가 둔 수" value={report.accuracy.plies.toLocaleString("ko-KR")} />
           <Stat
             label="중대 실수"
             value={report.accuracy.blunders.toLocaleString("ko-KR")}
@@ -189,7 +189,7 @@ export default function TrainingPage() {
         <h1 className="text-xl font-semibold tracking-tight">훈련 가이드</h1>
         <p className="mt-0.5 text-sm text-ink-soft">
           분석 {curriculum.analyzedGames}판을 오프닝·전술·전략·엔드게임 관점으로 나눠
-          보여줍니다. 약점마다 <strong className="font-medium text-ink">형이 실제로
+          보여줍니다. 약점마다 <strong className="font-medium text-ink">내가 실제로
           틀린 포지션</strong>을 문제로 풀어볼 수 있습니다.
         </p>
       </header>

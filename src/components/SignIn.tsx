@@ -75,7 +75,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         <p className="mt-1 text-sm text-ink-soft">
           자기 Chess.com 계정만 분석할 수 있습니다.{" "}
           <strong className="font-medium text-ink">비밀번호는 묻지 않습니다</strong> — 프로필에
-          잠깐 코드를 넣어 계정이 형 것임을 보이면 됩니다.
+          잠깐 코드를 넣어 계정이 본인 것임을 보이면 됩니다.
         </p>
       </div>
 

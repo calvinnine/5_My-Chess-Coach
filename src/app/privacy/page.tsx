@@ -15,8 +15,8 @@ export default function PrivacyPage() {
     <LegalPage title="개인정보 처리방침" updated="2026-09-05">
       <Section heading="한 줄 요약">
         <p>
-          Chess.com 공개 API로 가져온 <strong className="font-medium text-ink">형의 대국
-          기록</strong>과, 형이 직접 쓴 메모를 저장합니다. 비밀번호는 요청하지도 저장하지도
+          Chess.com 공개 API로 가져온 <strong className="font-medium text-ink">내 대국
+          기록</strong>과, 직접 쓴 메모를 저장합니다. 비밀번호는 요청하지도 저장하지도
           않습니다. 언제든 전부 삭제할 수 있습니다.
         </p>
       </Section>
@@ -37,7 +37,7 @@ export default function PrivacyPage() {
               최선수, 손실 점수, 등급, 국면, 감지된 약점 태그.
             </>,
             <>
-              <strong className="font-medium text-ink">형이 쓴 것</strong> — 대국 복기 메모,
+              <strong className="font-medium text-ink">내가 쓴 것</strong> — 대국 복기 메모,
               당시 생각, 퍼즐 시도 기록. 이 앱에서 가장 사적인 데이터입니다.
             </>,
             <>
@@ -65,7 +65,7 @@ export default function PrivacyPage() {
 
       <Section heading="쓰는 곳">
         <p>
-          저장한 데이터는 <strong className="font-medium text-ink">형에게 코칭을 보여주는
+          저장한 데이터는 <strong className="font-medium text-ink">코칭을 보여주는
           데에만</strong> 씁니다. 다른 사용자에게 보여주거나, 팔거나, 광고에 쓰지 않습니다.
           자기 계정의 데이터는 자기만 볼 수 있고, 서버가 모든 요청에서 소유자를 확인합니다.
         </p>
@@ -92,9 +92,9 @@ export default function PrivacyPage() {
         <p>이 셋 외의 어디에도 데이터를 보내지 않습니다.</p>
       </Section>
 
-      <Section heading="분석은 형의 브라우저에서 돕니다">
+      <Section heading="분석은 내 브라우저에서 돕니다">
         <p>
-          체스 엔진(Stockfish)은 서버가 아니라 <strong className="font-medium text-ink">형의
+          체스 엔진(Stockfish)은 서버가 아니라 <strong className="font-medium text-ink">내
           브라우저 안에서</strong> 실행됩니다. 서버로 올라오는 것은 엔진이 낸 점수뿐이고,
           그 점수로 손실·등급·약점을 계산하는 일은 서버가 다시 합니다.
         </p>

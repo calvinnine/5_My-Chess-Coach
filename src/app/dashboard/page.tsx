@@ -48,6 +48,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  /** Seconds left before syncing is allowed again; 0 when it is. */
+  const [cooldown, setCooldown] = useState(0);
+  const [cooldownReason, setCooldownReason] = useState<string | null>(null);
 
   /*
    * Nothing is fetched before the session is known: on a deployment every data
@@ -88,6 +91,21 @@ export default function DashboardPage() {
     if (playerId) void load(playerId);
   }, [playerId, load]);
 
+  /*
+   * Counts the wait down rather than printing the number the server happened to
+   * return: a static "56초 후에" is stale the moment it is rendered, and gives
+   * no signal that waiting is getting anywhere.
+   */
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((left) => left - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+
+  useEffect(() => {
+    if (cooldown === 0) setCooldownReason(null);
+  }, [cooldown]);
+
   /**
    * `months` widens how far back to look. Without it a sync only asks for the
    * month it last stopped on and anything after, which never reaches older
@@ -117,8 +135,14 @@ export default function DashboardPage() {
        * would read as "something broke" for what is a normal, expected answer
        * when someone else is syncing or the cooldown has not elapsed.
        */
-      if (err instanceof ApiError && err.status === 429) setSyncNote(err.message);
-      else setError(err instanceof Error ? err.message : "동기화에 실패했습니다.");
+      if (err instanceof ApiError && err.status === 429) {
+        setCooldown(err.retryAfterSeconds ?? 60);
+        setCooldownReason(
+          err.kind === "sync_busy"
+            ? "다른 동기화가 진행 중입니다"
+            : "너무 자주 동기화하고 있습니다",
+        );
+      } else setError(err instanceof Error ? err.message : "동기화에 실패했습니다.");
     } finally {
       setSyncing(false);
     }
@@ -209,12 +233,16 @@ export default function DashboardPage() {
               ))}
             </select>
           )}
-          <Button variant="secondary" onClick={() => void sync()} disabled={syncing}>
-            {syncing ? "동기화 중…" : "새 게임 동기화"}
+          <Button
+            variant="secondary"
+            onClick={() => void sync()}
+            disabled={syncing || cooldown > 0}
+          >
+            {syncing ? "동기화 중…" : cooldown > 0 ? `${cooldown}초 후 가능` : "새 게임 동기화"}
           </Button>
           <select
             value=""
-            disabled={syncing}
+            disabled={syncing || cooldown > 0}
             onChange={(e) => {
               const months = Number(e.target.value);
               e.target.value = "";
@@ -232,7 +260,16 @@ export default function DashboardPage() {
       </header>
 
       {error && <ErrorNote>{error}</ErrorNote>}
-      {syncNote && (
+      {cooldownReason && cooldown > 0 && (
+        <p className="rounded-lg bg-surface-sunken px-3.5 py-2.5 text-sm text-ink-soft">
+          {cooldownReason}.{" "}
+          <strong className="font-medium text-ink" aria-live="polite">
+            {cooldown}초
+          </strong>{" "}
+          후에 다시 시도할 수 있습니다.
+        </p>
+      )}
+      {syncNote && cooldown === 0 && (
         <p className="rounded-lg bg-surface-sunken px-3.5 py-2.5 text-sm text-ink-soft">{syncNote}</p>
       )}
 
@@ -320,7 +357,7 @@ export default function DashboardPage() {
 
       <Card
         title="구간별 성적"
-        hint="형이 둔 수만 집계합니다. 상대 수는 평가 흐름에만 쓰고 통계에는 넣지 않습니다."
+        hint="내가 둔 수만 집계합니다. 상대 수는 평가 흐름에만 쓰고 통계에는 넣지 않습니다."
         action={
           <Link href="/training" className="text-xs text-accent hover:underline">
             훈련 가이드
@@ -335,7 +372,7 @@ export default function DashboardPage() {
               <thead>
                 <tr className="text-left text-[11px] text-ink-faint">
                   <th className="pb-1.5 font-medium">구간</th>
-                  <th className="pb-1.5 text-right font-medium">형이 둔 수</th>
+                  <th className="pb-1.5 text-right font-medium">내가 둔 수</th>
                   <th className="pb-1.5 text-right font-medium">평균 손실</th>
                   <th className="pb-1.5 text-right font-medium">중대 실수</th>
                   <th className="pb-1.5 text-right font-medium">비중</th>

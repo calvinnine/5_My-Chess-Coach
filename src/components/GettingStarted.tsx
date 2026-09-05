@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, apiGet, apiSend } from "@/lib/client-api";
 import { Button, Card, ErrorNote } from "./ui";
 
@@ -29,7 +29,17 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(
     null,
   );
+  /** Seconds left before syncing is allowed again; 0 when it is. */
+  const [cooldown, setCooldown] = useState(0);
   const abort = useRef<AbortController | null>(null);
+
+  // Counting down beats printing the number the server happened to return,
+  // which is stale the moment it renders.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((left) => left - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
 
   async function syncGames() {
     setError(null);
@@ -48,7 +58,7 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
       );
       onDone();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 429) setNote(err.message);
+      if (err instanceof ApiError && err.status === 429) setCooldown(err.retryAfterSeconds ?? 60);
       else setError(err instanceof Error ? err.message : "게임을 가져오지 못했습니다.");
     } finally {
       setBusy(null);
@@ -130,10 +140,21 @@ export default function GettingStarted({ username, totalGames, pendingGames, onD
           <Button
             variant={hasGames ? "secondary" : "primary"}
             onClick={() => void syncGames()}
-            disabled={busy !== null}
+            disabled={busy !== null || cooldown > 0}
           >
-            {busy === "sync" ? "가져오는 중…" : hasGames ? "다시 가져오기" : "대국 가져오기"}
+            {busy === "sync"
+              ? "가져오는 중…"
+              : cooldown > 0
+                ? `${cooldown}초 후 가능`
+                : hasGames
+                  ? "다시 가져오기"
+                  : "대국 가져오기"}
           </Button>
+          {cooldown > 0 && (
+            <p className="mt-2 text-xs text-ink-faint" aria-live="polite">
+              너무 자주 가져오고 있습니다. {cooldown}초 후에 다시 시도할 수 있습니다.
+            </p>
+          )}
         </div>
       </Card>
 

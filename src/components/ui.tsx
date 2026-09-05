@@ -48,8 +48,13 @@ export function Button({
   type?: "button" | "submit";
   size?: "sm" | "md";
 }) {
+  /*
+   * Labels never wrap: they are two or three words, and a break mid-phrase
+   * ("코드 / 받기") reads as a rendering fault. `shrink-0` keeps a button from
+   * being squeezed into wrapping by a `w-full` field beside it in a flex row.
+   */
   const base =
-    "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+    "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
   const sizes = { sm: "px-2.5 py-1.5 text-xs", md: "px-3.5 py-2 text-sm" };
   const variants = {
     primary: "bg-ink text-paper hover:bg-ink-soft",

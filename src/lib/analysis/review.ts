@@ -333,7 +333,7 @@ export function buildReview(input: ReviewInput): RuleBasedReview {
 
   const overallSummary = [
     headline,
-    `형이 둔 ${playerMoves.length}수의 평균 평가 손실은 ${averageLoss}cp입니다.`,
+    `내가 둔 ${playerMoves.length}수의 평균 평가 손실은 ${averageLoss}cp입니다.`,
     turningPoints.length > 0
       ? `승패를 가른 장면 ${turningPoints.length}개를 선별했습니다.`
       : "이 게임에서는 결정적 전환점이라 부를 만한 장면이 없었습니다.",

@@ -159,7 +159,7 @@ function headlineFor(
   const top = weaknesses[0];
   if (accuracy) {
     return (
-      `가장 큰 문제는 ${top.label}입니다. 이 구간은 형이 둔 수의 평균 손실이 ` +
+      `가장 큰 문제는 ${top.label}입니다. 이 구간은 내가 둔 수의 평균 손실이 ` +
       `${accuracy.averageLossCp}cp이고, 전체 중대 실수의 ${(accuracy.blunderShare * 100).toFixed(0)}%가 여기서 나옵니다.`
     );
   }
@@ -186,7 +186,7 @@ function drillsFor(
     repertoireSplit.lossGapCp >= 6
   ) {
     drills.push(
-      `주력 밖 오프닝이 나온 최근 게임 3판을 열어, 형이 처음으로 "모르겠다"고 느낀 수를 표시하고 그 지점의 계획을 한 문장으로 적기`,
+      `주력 밖 오프닝이 나온 최근 게임 3판을 열어, 처음으로 "모르겠다"고 느낀 수를 표시하고 그 지점의 계획을 한 문장으로 적기`,
     );
   }
 

@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-paper text-ink">
         <header className="border-b border-line bg-surface">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
-            <Link href="/dashboard" className="text-[15px] font-semibold tracking-tight">
+            <Link href="/" className="text-[15px] font-semibold tracking-tight">
               개인 체스 코치
             </Link>
             <nav className="flex items-center gap-1 text-sm">

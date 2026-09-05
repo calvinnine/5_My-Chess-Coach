@@ -73,8 +73,13 @@ export async function POST(
 
       await persistAnalysis(gameId, game, {
         moves,
-        // Recorded so a browser-produced analysis is distinguishable later.
-        engineVersion: `${parsed.data.engineVersion} (browser)`,
+        /*
+         * Marked as uploaded rather than computed here. Which engine ran is
+         * already in the name the client reports — "Stockfish 18 Lite WASM" for
+         * a browser, "Stockfish 18" for the native binary a script may use — so
+         * saying "browser" here was wrong for anything but the website.
+         */
+        engineVersion: `${parsed.data.engineVersion} (uploaded)`,
         settings,
       });
     } catch (err) {

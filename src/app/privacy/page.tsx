@@ -107,7 +107,9 @@ export default function PrivacyPage() {
             설정
           </Link>
           에서 <strong className="font-medium text-ink">계정 삭제</strong>를 누르면 대국,
-          분석, 메모, 퍼즐 기록, 로그인 정보가 **즉시 그리고 되돌릴 수 없게** 지워집니다.
+          분석, 메모, 퍼즐 기록, 로그인 정보가{" "}
+          <strong className="font-medium text-ink">즉시 그리고 되돌릴 수 없게</strong>{" "}
+          지워집니다.
           지우기 전에 PGN과 분석 결과를 파일로 내려받을 수 있습니다.
         </p>
       </Section>

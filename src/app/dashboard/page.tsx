@@ -88,7 +88,12 @@ export default function DashboardPage() {
     if (playerId) void load(playerId);
   }, [playerId, load]);
 
-  async function sync() {
+  /**
+   * `months` widens how far back to look. Without it a sync only asks for the
+   * month it last stopped on and anything after, which never reaches older
+   * games — the routine case, and the cheap one.
+   */
+  async function sync(months?: number) {
     if (!data) return;
     setSyncing(true);
     setSyncNote(null);
@@ -99,9 +104,10 @@ export default function DashboardPage() {
         monthsChecked: string[];
         monthsSkipped: string[];
         errors: string[];
-      }>("/api/sync", "POST", { username: data.username });
+      }>("/api/sync", "POST", { username: data.username, months });
       setSyncNote(
         `새 게임 ${summary.inserted}판 추가, 중복 ${summary.duplicates}판 건너뜀. ` +
+          (months ? `최근 ${months}개월을 확인했습니다. ` : "") +
           (summary.errors.length ? `오류: ${summary.errors.join("; ")}` : ""),
       );
       await load(data.playerId);
@@ -206,6 +212,22 @@ export default function DashboardPage() {
           <Button variant="secondary" onClick={() => void sync()} disabled={syncing}>
             {syncing ? "동기화 중…" : "새 게임 동기화"}
           </Button>
+          <select
+            value=""
+            disabled={syncing}
+            onChange={(e) => {
+              const months = Number(e.target.value);
+              e.target.value = "";
+              if (months > 0) void sync(months);
+            }}
+            className="rounded-lg border border-line-strong bg-surface px-2.5 py-2 text-sm"
+            aria-label="지난 대국 가져오기"
+          >
+            <option value="">지난 대국 더 가져오기</option>
+            <option value="6">최근 6개월</option>
+            <option value="12">최근 12개월</option>
+            <option value="24">최근 24개월</option>
+          </select>
         </div>
       </header>
 

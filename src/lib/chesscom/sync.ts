@@ -13,8 +13,7 @@ import {
 import type { ChessComGame } from "./schemas";
 import { resultFor, TERMINATION_LABELS } from "./result";
 import { classifyOpponent } from "./opponent";
-
-const DEFAULT_FIRST_RUN_MONTHS = 3;
+import { monthKey, selectArchiveTargets } from "./archive-window";
 
 /** SQLite-backed ETag store so repeat syncs stay cheap and polite. */
 const dbCache: ConditionalCache = {
@@ -200,16 +199,10 @@ export async function syncPlayerGames(
     return summary;
   }
 
-  const monthsBack = options.months ?? DEFAULT_FIRST_RUN_MONTHS;
-  let targets = archives.slice(-monthsBack);
-  if (player.lastSyncedMonth) {
-    // Incremental: only re-request the last synced month and everything after.
-    const fromIndex = archives.findIndex((url) => {
-      const parsed = parseArchiveUrl(url);
-      return parsed && monthKey(parsed.year, parsed.month) >= player.lastSyncedMonth!;
-    });
-    if (fromIndex >= 0) targets = archives.slice(fromIndex);
-  }
+  const targets = selectArchiveTargets(archives, {
+    months: options.months,
+    lastSyncedMonth: player.lastSyncedMonth,
+  });
 
   for (const archiveUrl of targets) {
     if (options.signal?.aborted) break;
@@ -387,9 +380,6 @@ async function storeGame(
   return parseError ? "parse_failed" : "inserted";
 }
 
-function monthKey(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, "0")}`;
-}
 
 export { openingFamily };
 export { resultFor } from "./result";
